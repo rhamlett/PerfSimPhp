@@ -36,7 +36,7 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 
 // Polling intervals (milliseconds)
-const METRICS_POLL_INTERVAL = 500;
+const METRICS_POLL_INTERVAL = 250;
 const EVENTS_POLL_INTERVAL = 2000;
 const PROBE_POLL_INTERVAL = 100;
 

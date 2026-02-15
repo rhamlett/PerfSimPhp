@@ -90,95 +90,114 @@ class Router
 
         // Health endpoints
         if ($method === 'GET' && $path === '/api/health') {
-            return HealthController::index();
+            return self::ok(HealthController::index());
         }
         if ($method === 'GET' && $path === '/api/health/environment') {
-            return HealthController::environment();
+            return self::ok(HealthController::environment());
         }
         if ($method === 'GET' && $path === '/api/health/build') {
-            return HealthController::build();
+            return self::ok(HealthController::build());
         }
         if ($method === 'GET' && $path === '/api/health/probe') {
-            return HealthController::probe();
+            return self::ok(HealthController::probe());
         }
 
         // Metrics endpoints
         if ($method === 'GET' && $path === '/api/metrics') {
-            return MetricsController::index();
+            return self::ok(MetricsController::index());
         }
         if ($method === 'GET' && $path === '/api/metrics/probe') {
-            return MetricsController::probe();
+            return self::ok(MetricsController::probe());
         }
 
         // CPU simulation endpoints
         if ($method === 'POST' && $path === '/api/simulations/cpu') {
-            return CpuController::start();
+            CpuController::start();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/simulations/cpu') {
-            return CpuController::list();
+            CpuController::list();
+            return null;
         }
         if ($method === 'DELETE' && preg_match('#^/api/simulations/cpu/([a-f0-9-]+)$#i', $path, $matches)) {
-            return CpuController::stop($matches[1]);
+            CpuController::stop($matches[1]);
+            return null;
         }
 
         // Memory simulation endpoints
         if ($method === 'POST' && $path === '/api/simulations/memory') {
-            return MemoryController::allocate();
+            MemoryController::allocate();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/simulations/memory') {
-            return MemoryController::list();
+            MemoryController::list();
+            return null;
         }
         if ($method === 'DELETE' && preg_match('#^/api/simulations/memory/([a-f0-9-]+)$#i', $path, $matches)) {
-            return MemoryController::release($matches[1]);
+            MemoryController::release($matches[1]);
+            return null;
         }
 
         // Blocking simulation endpoint (replaces Node.js "event loop blocking")
         if ($method === 'POST' && $path === '/api/simulations/blocking') {
-            return BlockingController::block();
+            BlockingController::block();
+            return null;
         }
 
         // Slow request endpoint
         if ($method === 'GET' && $path === '/api/simulations/slow') {
-            return SlowController::delay();
+            SlowController::slow();
+            return null;
         }
 
         // Crash simulation endpoints
         if ($method === 'POST' && $path === '/api/simulations/crash/failfast') {
-            return CrashController::failfast();
+            CrashController::failfast();
+            return null;
         }
         if ($method === 'POST' && $path === '/api/simulations/crash/stackoverflow') {
-            return CrashController::stackoverflow();
+            CrashController::stackoverflow();
+            return null;
         }
         if ($method === 'POST' && $path === '/api/simulations/crash/exception') {
-            return CrashController::exception();
+            CrashController::exception();
+            return null;
         }
         if ($method === 'POST' && $path === '/api/simulations/crash/memory') {
-            return CrashController::memory();
+            CrashController::memory();
+            return null;
         }
 
         // Load test endpoints
         if ($method === 'GET' && $path === '/api/loadtest') {
-            return LoadTestController::execute();
+            LoadTestController::execute();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/loadtest/stats') {
-            return LoadTestController::stats();
+            LoadTestController::stats();
+            return null;
         }
 
         // Admin endpoints
         if ($method === 'GET' && $path === '/api/simulations') {
-            return AdminController::listSimulations();
+            AdminController::listSimulations();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/admin/status') {
-            return AdminController::status();
+            AdminController::status();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/admin/events') {
-            return AdminController::events();
+            AdminController::events();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/admin/memory-debug') {
-            return AdminController::memoryDebug();
+            AdminController::memoryDebug();
+            return null;
         }
         if ($method === 'GET' && $path === '/api/admin/system-info') {
-            return AdminController::systemInfo();
+            AdminController::systemInfo();
+            return null;
         }
 
         // 404 — No matching route
@@ -189,6 +208,21 @@ class Router
                 'message' => 'The requested resource does not exist',
             ],
         ];
+    }
+
+    /**
+     * Wrap a controller result in a standard response envelope.
+     *
+     * Controllers that already return ['status' => int, 'body' => array]
+     * are passed through unchanged; otherwise the result is wrapped as a 200 OK.
+     */
+    private static function ok(array $result): array
+    {
+        // If the controller already returned the envelope format, pass through
+        if (isset($result['status']) && is_int($result['status']) && array_key_exists('body', $result)) {
+            return $result;
+        }
+        return ['status' => 200, 'body' => $result];
     }
 
     /**

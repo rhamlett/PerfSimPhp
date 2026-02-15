@@ -60,9 +60,11 @@ class MetricsService
     public static function getCpuMetrics(): array
     {
         $loadAvg = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.0, 0.0, 0.0];
+        $cpuCount = self::getCpuCount();
 
         // Estimate CPU percentage from 1-minute load average vs CPU count
-        $cpuCount = self::getCpuCount();
+        // sys_getloadavg() works on Linux (Azure App Service target)
+        // On Windows (local dev only), it returns [0,0,0] — metrics will show 0% locally
         $usagePercent = $cpuCount > 0 ? min(100, ($loadAvg[0] / $cpuCount) * 100) : 0;
 
         return [
@@ -90,12 +92,18 @@ class MetricsService
 
         $systemTotal = self::getSystemMemory();
 
+        $usedMb = round($phpUsage / 1024 / 1024, 2);
+        $rssMb = round($phpUsageReal / 1024 / 1024, 2);
+        $totalSystemMb = round($systemTotal / 1024 / 1024, 2);
+
         $metrics = [
-            'phpUsageMb' => round($phpUsage / 1024 / 1024, 2),
+            'usedMb' => $usedMb,
+            'rssMb' => $rssMb,
+            'phpUsageMb' => $usedMb,
             'phpPeakMb' => round($phpPeak / 1024 / 1024, 2),
-            'phpUsageRealMb' => round($phpUsageReal / 1024 / 1024, 2),
+            'phpUsageRealMb' => $rssMb,
             'memoryLimitMb' => self::getMemoryLimitMb(),
-            'totalSystemMb' => round($systemTotal / 1024 / 1024, 2),
+            'totalSystemMb' => $totalSystemMb,
         ];
 
         // Add APCu memory info if available
@@ -119,12 +127,15 @@ class MetricsService
      */
     public static function getProcessMetrics(): array
     {
+        $activeWorkers = count(SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING'));
+
         return [
             'pid' => getmypid(),
             'phpVersion' => PHP_VERSION,
             'sapi' => PHP_SAPI,
             'uptime' => self::getUptime(),
             'maxExecutionTime' => (int) ini_get('max_execution_time'),
+            'activeWorkers' => $activeWorkers,
         ];
     }
 
