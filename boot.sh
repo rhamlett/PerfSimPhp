@@ -14,6 +14,9 @@ ls -R $NGINX_BASE/conf.d
 echo "Existing sites-enabled contents:"
 ls -R $NGINX_BASE/sites-enabled
 
+# Forcefully overwrite the default index.html so even if config fails, we don't see "Welcome to Nginx"
+echo "<h1>PerfSimPhp Booting...</h1><p>If you see this, the Nginx config swap hasn't taken effect yet, but the boot script ran.</p>" > /usr/share/nginx/html/index.html
+
 # Delete EVERYTHING in conf.d to ensure no stowaways
 rm -rf $NGINX_BASE/conf.d/*
 # Delete defaults in sites-*
