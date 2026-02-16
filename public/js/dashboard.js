@@ -403,10 +403,14 @@ function updateActiveSimulations(simulations) {
   }
 
   if (simulations.blocking?.active) {
+    // Show remaining time if available, otherwise total duration
+    const timeDisplay = simulations.blocking.remaining !== undefined 
+      ? `${simulations.blocking.remaining}s remaining`
+      : `${simulations.blocking.duration || 0}s`;
     activeSims.push({
       type: 'blocking',
       label: 'Thread Blocking',
-      detail: `${simulations.blocking.duration || 0}s`,
+      detail: timeDisplay,
       icon: '🔒',
     });
   }

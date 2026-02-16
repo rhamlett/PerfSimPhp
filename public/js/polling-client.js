@@ -278,12 +278,13 @@ function pollEventsOnce() {
     .then(data => {
       onPollSuccess();
       const events = data.events || [];
-      const newCount = data.count || events.length;
+      // Use total event count (not response count) to detect new events
+      const newTotal = data.total || data.count || events.length;
 
-      // Only process if there are new events
-      if (newCount > lastEventCount && lastEventCount > 0) {
+      // Only process if there are new events since we last checked
+      if (newTotal > lastEventCount && lastEventCount > 0) {
         // Calculate how many new events arrived
-        const newEventsCount = newCount - lastEventCount;
+        const newEventsCount = newTotal - lastEventCount;
         // Events are newest-first from the API, so take the first N
         const newEvents = events.slice(0, Math.min(newEventsCount, events.length));
         // Dispatch in chronological order (reverse since API returns newest-first)
@@ -293,7 +294,7 @@ function pollEventsOnce() {
           }
         }
       }
-      lastEventCount = newCount;
+      lastEventCount = newTotal;
     })
     .catch(() => {
       // Silent failure for events polling
