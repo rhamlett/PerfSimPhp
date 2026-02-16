@@ -58,19 +58,41 @@ class CpuStressService
             $durationSeconds
         );
 
-        // Log the start
+        // Calculate worker count for logging
+        $workerCount = self::calculateWorkerCount($targetLoadPercent);
+
+        // Log the start with worker count
         EventLogService::info(
             'SIMULATION_STARTED',
-            "CPU stress simulation started at {$targetLoadPercent}% for {$durationSeconds}s",
+            "CPU stress started: {$targetLoadPercent}% target, {$workerCount} workers, {$durationSeconds}s",
             $simulation['id'],
             'CPU_STRESS',
-            ['targetLoadPercent' => $targetLoadPercent, 'durationSeconds' => $durationSeconds]
+            ['targetLoadPercent' => $targetLoadPercent, 'durationSeconds' => $durationSeconds, 'workers' => $workerCount]
         );
 
         // Launch background CPU worker processes
         self::launchWorkers($simulation['id'], $targetLoadPercent, $durationSeconds);
 
         return $simulation;
+    }
+
+    /**
+     * Calculates the number of worker processes for a given target load.
+     */
+    private static function calculateWorkerCount(int $targetLoadPercent): int
+    {
+        $cpuCount = self::getCpuCount();
+        $baseWorkers = (int) ceil(($targetLoadPercent / 100) * $cpuCount);
+        
+        $multiplier = match(true) {
+            $targetLoadPercent >= 90 => 4.0,
+            $targetLoadPercent >= 75 => 3.5,
+            $targetLoadPercent >= 50 => 3.0,
+            $targetLoadPercent >= 25 => 2.5,
+            default => 2.0,
+        };
+        
+        return min(16, max(2, (int) ceil($baseWorkers * $multiplier)));
     }
 
     /**
@@ -103,10 +125,14 @@ class CpuStressService
      * Launches background CPU worker processes.
      *
      * ALGORITHM:
-     * 1. Determine CPU core count
-     * 2. Calculate worker count: round((targetLoadPercent / 100) * numCpus)
-     * 3. Launch each worker as a background PHP process
-     * 4. Store PIDs in SharedStorage for later termination
+     * 1. Calculate worker count based on target load
+     * 2. Launch all workers in parallel for instant ramp-up
+     * 3. Store PIDs in SharedStorage for later termination
+     *
+     * AZURE APP SERVICE CONSIDERATIONS:
+     * - Containers often report more cores than available (e.g., 4 cores visible but throttled to 1)
+     * - We spawn extra workers to compensate for this throttling
+     * - Workers should hit target CPU within 2-3 seconds
      *
      * @param string $simulationId Simulation ID for tracking
      * @param int $targetLoadPercent Target CPU load percentage (1-100)
@@ -117,23 +143,8 @@ class CpuStressService
         int $targetLoadPercent,
         int $durationSeconds
     ): void {
+        $numProcesses = self::calculateWorkerCount($targetLoadPercent);
         $cpuCount = self::getCpuCount();
-        
-        // Azure App Service containers often have access to fewer cores than reported.
-        // To achieve visible CPU load in metrics, we spawn extra workers.
-        // Base formula: (targetLoad/100) * cpuCount
-        // For high loads (>75%), add extra workers to ensure saturation
-        $baseWorkers = (int) round(($targetLoadPercent / 100) * $cpuCount);
-        
-        // Add extra workers for high loads to ensure visible impact in Azure metrics
-        $extraMultiplier = 1.0;
-        if ($targetLoadPercent >= 90) {
-            $extraMultiplier = 2.0; // Double workers for 90-100%
-        } elseif ($targetLoadPercent >= 75) {
-            $extraMultiplier = 1.5; // 50% more workers for 75-89%
-        }
-        
-        $numProcesses = max(1, (int) round($baseWorkers * $extraMultiplier));
 
         $workerScript = dirname(__DIR__, 2) . '/workers/cpu-worker.php';
         
@@ -232,6 +243,7 @@ class CpuStressService
 
     /**
      * Kills all worker processes for a simulation.
+     * Uses batch killing for fast cleanup.
      *
      * @param string $simulationId Simulation ID
      */
@@ -240,8 +252,10 @@ class CpuStressService
         $allPids = SharedStorage::get(self::PIDS_KEY, []);
         $pids = $allPids[$simulationId] ?? [];
 
-        foreach ($pids as $pid) {
-            self::killProcess($pid);
+        if (!empty($pids)) {
+            // Kill all processes in batch for instant cleanup
+            self::killProcessesBatch($pids);
+            error_log("[CPU Stress] Killed workers for simulation {$simulationId}: PIDs=" . implode(',', $pids));
         }
 
         // Remove from storage
@@ -250,10 +264,6 @@ class CpuStressService
             unset($allPids[$simulationId]);
             return $allPids;
         }, []);
-
-        if (!empty($pids)) {
-            error_log("[CPU Stress] Killed workers for simulation {$simulationId}: PIDs=" . implode(',', $pids));
-        }
     }
 
     /**
@@ -268,29 +278,26 @@ class CpuStressService
     }
 
     /**
-     * Kills a single process by PID.
+     * Kills multiple processes in batch for fast cleanup.
+     * Uses a single shell command to kill all PIDs at once.
      *
-     * @param int $pid Process ID
+     * @param array $pids Array of process IDs
      */
-    private static function killProcess(int $pid): void
+    private static function killProcessesBatch(array $pids): void
     {
-        if ($pid <= 0) {
+        $validPids = array_filter($pids, fn($pid) => is_numeric($pid) && $pid > 0);
+        if (empty($validPids)) {
             return;
         }
 
         if (PHP_OS_FAMILY === 'Windows') {
-            @exec("taskkill /PID {$pid} /F 2>&1");
+            // Windows: batch taskkill
+            $pidList = implode(' ', array_map(fn($p) => "/PID {$p}", $validPids));
+            @exec("taskkill {$pidList} /F 2>&1");
         } else {
-            // Try SIGTERM first, then SIGKILL
-            if (function_exists('posix_kill')) {
-                posix_kill($pid, 15); // SIGTERM
-                usleep(200_000); // 200ms
-                posix_kill($pid, 9); // SIGKILL
-            } else {
-                @exec("kill -15 {$pid} 2>/dev/null");
-                usleep(200_000);
-                @exec("kill -9 {$pid} 2>/dev/null");
-            }
+            // Linux: kill all PIDs in single command with SIGKILL (immediate)
+            $pidList = implode(' ', $validPids);
+            @exec("kill -9 {$pidList} 2>/dev/null");
         }
     }
 
@@ -344,18 +351,19 @@ class CpuStressService
         $activeIds = array_map(fn($s) => $s['id'], $activeSimulations);
 
         $orphanedIds = [];
+        $allOrphanedPids = [];
         foreach (array_keys($allPids) as $simId) {
             if (!in_array($simId, $activeIds, true)) {
                 $orphanedIds[] = $simId;
+                $pids = $allPids[$simId] ?? [];
+                $allOrphanedPids = array_merge($allOrphanedPids, $pids);
             }
         }
 
-        foreach ($orphanedIds as $simId) {
-            $pids = $allPids[$simId] ?? [];
-            foreach ($pids as $pid) {
-                self::killProcess($pid);
-            }
-            error_log("[CPU Stress] Cleaned up orphaned workers for simulation {$simId}: PIDs=" . implode(',', $pids));
+        // Batch kill all orphaned workers in single command
+        if (!empty($allOrphanedPids)) {
+            self::killProcessesBatch($allOrphanedPids);
+            error_log("[CPU Stress] Cleaned up orphaned workers: PIDs=" . implode(',', $allOrphanedPids));
         }
 
         // Remove orphaned entries from storage

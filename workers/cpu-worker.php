@@ -64,21 +64,24 @@ $endTime = microtime(true) + $durationSeconds;
  *
  * ALGORITHM:
  *   1. Enter tight while loop
- *   2. Each iteration: hash_pbkdf2 with 10,000 rounds (~5-10ms of pure CPU)
+ *   2. Each iteration: multiple hash operations to minimize loop overhead
  *   3. Loop exits when duration elapses or signal received
  *
- * The choice of hash_pbkdf2 is deliberate:
- *   - Cryptographic work that cannot be optimized away
- *   - Predictable duration per call (~5-10ms)
- *   - Available in PHP's standard library (no extensions needed)
+ * Using multiple hash operations per loop iteration reduces the percentage
+ * of time spent on loop overhead and time checks, maximizing CPU burn.
  */
+$checkInterval = 0;
 while ($running && microtime(true) < $endTime) {
-    // PBKDF2 with 10,000 iterations: ~5-10ms of CPU-intensive synchronous work
-    hash_pbkdf2('sha512', 'password', 'salt', 10000, 64, false);
+    // Batch multiple CPU-intensive operations per loop iteration
+    // This reduces time check overhead and maximizes CPU burn
+    for ($i = 0; $i < 10; $i++) {
+        hash_pbkdf2('sha512', 'password', 'salt', 5000, 64, false);
+    }
 
-    // Check for signals periodically (POSIX systems only)
-    if (function_exists('pcntl_signal_dispatch')) {
+    // Check for signals less frequently (every ~50ms instead of every ~5ms)
+    if (++$checkInterval >= 10 && function_exists('pcntl_signal_dispatch')) {
         pcntl_signal_dispatch();
+        $checkInterval = 0;
     }
 }
 
