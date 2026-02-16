@@ -227,44 +227,41 @@ function pollMetricsOnce() {
 function startEventsPolling() {
   if (eventsPollTimer) clearInterval(eventsPollTimer);
 
-  // Load existing events immediately on start
-  loadExistingEvents();
+  // Initialize event counter and clear log (fresh start on each page load)
+  initializeEventLog();
   
   eventsPollTimer = setInterval(pollEventsOnce, EVENTS_POLL_INTERVAL);
 }
 
 /**
- * Load all existing events on initial page load.
- * This ensures we see the current event history, not just new events.
+ * Initialize event log on page load.
+ * Sets the event counter to current server count so we only show NEW events.
+ * Clears the log display for a fresh start.
  */
-function loadExistingEvents() {
+function initializeEventLog() {
   fetch('/api/admin/events?limit=50', { cache: 'no-store' })
     .then(response => {
       if (!response.ok) throw new Error('Events fetch failed');
       return response.json();
     })
     .then(data => {
-      const events = data.events || [];
-      lastEventCount = data.count || events.length;
+      // Initialize lastEventCount to current server count
+      // This marks our "starting point" - we'll only show events after this
+      lastEventCount = data.total || data.count || (data.events || []).length;
       
-      // Clear event log state AFTER fetch completes but BEFORE adding events
-      // This ensures no race condition with dashboard.js initialization
+      // Clear event log state (both JS state and DOM) to start fresh
       if (typeof window.clearEventLog === 'function') {
         window.clearEventLog();
-      } else {
-        // Fallback: clear DOM directly if dashboard.js hasn't exposed function yet
-        const container = document.getElementById('event-log');
-        if (container) {
-          container.innerHTML = '';
-        }
       }
       
-      // Load events from oldest to newest (reverse since API returns newest-first)
-      for (let i = events.length - 1; i >= 0; i--) {
-        if (typeof onEventUpdate === 'function') {
-          onEventUpdate(events[i]);
-        }
+      // Set empty message in DOM
+      const container = document.getElementById('event-log');
+      if (container) {
+        container.innerHTML = '<div class="event-log-empty">No events yet. Start a simulation to see events here.</div>';
       }
+      
+      // DON'T load existing events - start fresh on page load
+      // Only show events that occur while page is open
     })
     .catch(() => {
       // Silent failure for initial event load
