@@ -9,7 +9,9 @@
 # fastcgi_pass socket/address if needed
 
 server {
-    listen 8080;
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
+    listen 80;
     server_name _;
     
     # Document root points to public/ directory
