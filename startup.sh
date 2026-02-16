@@ -74,3 +74,10 @@ echo "memory_limit: $(php -r "echo ini_get('memory_limit');" 2>/dev/null)"
 echo "Nginx dirs: $(ls -d /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || echo 'none found')"
 echo "========================="
 echo "PerfSimPhp startup complete"
+
+# START PHP-FPM
+# Critical: The container will exit if this script finishes.
+# We must start the main process (PHP-FPM) in the foreground to keep it running.
+# Oryx normally does this, but when we override the startup command, we often take full control.
+echo "Starting PHP-FPM in foreground..."
+php-fpm -F
