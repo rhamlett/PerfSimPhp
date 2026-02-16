@@ -227,7 +227,36 @@ function pollMetricsOnce() {
 function startEventsPolling() {
   if (eventsPollTimer) clearInterval(eventsPollTimer);
 
+  // Load existing events immediately on start
+  loadExistingEvents();
+  
   eventsPollTimer = setInterval(pollEventsOnce, EVENTS_POLL_INTERVAL);
+}
+
+/**
+ * Load all existing events on initial page load.
+ * This ensures we see the current event history, not just new events.
+ */
+function loadExistingEvents() {
+  fetch('/api/admin/events?limit=50', { cache: 'no-store' })
+    .then(response => {
+      if (!response.ok) throw new Error('Events fetch failed');
+      return response.json();
+    })
+    .then(data => {
+      const events = data.events || [];
+      lastEventCount = data.count || events.length;
+      
+      // Load events from oldest to newest (reverse since API returns newest-first)
+      for (let i = events.length - 1; i >= 0; i--) {
+        if (typeof onEventUpdate === 'function') {
+          onEventUpdate(events[i]);
+        }
+      }
+    })
+    .catch(() => {
+      // Silent failure for initial event load
+    });
 }
 
 /**

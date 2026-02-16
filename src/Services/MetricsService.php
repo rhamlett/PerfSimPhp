@@ -32,6 +32,9 @@ declare(strict_types=1);
 namespace PerfSimPhp\Services;
 
 use PerfSimPhp\Config;
+use PerfSimPhp\Services\SimulationTrackerService;
+use PerfSimPhp\Services\MemoryPressureService;
+use PerfSimPhp\Services\BlockingService;
 
 class MetricsService
 {
@@ -46,6 +49,58 @@ class MetricsService
             'memory' => self::getMemoryMetrics(),
             'process' => self::getProcessMetrics(),
             'requestBlocking' => self::getBlockingMetrics(),
+            'simulations' => self::getSimulationsStatus(),
+        ];
+    }
+
+    /**
+     * Get simulation status for dashboard Active Simulations display.
+     * Returns status for each simulation type with 'active' boolean.
+     */
+    private static function getSimulationsStatus(): array
+    {
+        // CPU stress simulations
+        $cpuSims = SimulationTrackerService::getActiveSimulationsByType('CPU_STRESS');
+        $cpuActive = count($cpuSims) > 0;
+        $cpuTargetLoad = 0;
+        foreach ($cpuSims as $sim) {
+            $cpuTargetLoad = max($cpuTargetLoad, $sim['parameters']['targetLoadPercent'] ?? 0);
+        }
+
+        // Memory pressure simulations
+        $memorySims = SimulationTrackerService::getActiveSimulationsByType('MEMORY_PRESSURE');
+        $memoryActive = count($memorySims) > 0;
+        $memoryAllocatedMb = MemoryPressureService::getTotalAllocatedMb();
+
+        // Blocking simulations - check active time window
+        $blockingMode = BlockingService::getBlockingMode();
+        $blockingActive = $blockingMode !== null;
+        $blockingDuration = $blockingMode['durationSec'] ?? 0;
+
+        // Slow request simulations
+        $slowSims = SimulationTrackerService::getActiveSimulationsByType('SLOW_REQUEST');
+        $slowActive = count($slowSims) > 0;
+        $slowCount = count($slowSims);
+
+        return [
+            'cpu' => [
+                'active' => $cpuActive,
+                'targetLoad' => $cpuTargetLoad,
+                'count' => count($cpuSims),
+            ],
+            'memory' => [
+                'active' => $memoryActive,
+                'allocatedMb' => $memoryAllocatedMb,
+                'count' => count($memorySims),
+            ],
+            'blocking' => [
+                'active' => $blockingActive,
+                'duration' => $blockingDuration,
+            ],
+            'slowRequests' => [
+                'active' => $slowActive,
+                'activeCount' => $slowCount,
+            ],
         ];
     }
 
