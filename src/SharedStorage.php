@@ -46,6 +46,19 @@ class SharedStorage
     }
 
     /**
+     * Get information about the storage backend.
+     */
+    public static function getInfo(): array
+    {
+        return [
+            'backend' => self::hasApcu() ? 'apcu' : 'file',
+            'apcuAvailable' => self::hasApcu(),
+            'apcuFunctionExists' => function_exists('apcu_fetch'),
+            'apcuEnabled' => function_exists('apcu_enabled') ? apcu_enabled() : false,
+        ];
+    }
+
+    /**
      * Get a value from shared storage.
      *
      * @param string $key Storage key

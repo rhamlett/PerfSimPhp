@@ -140,6 +140,7 @@ class HealthController
                 '$_ENV' => count($_ENV),
                 '$_SERVER' => count($_SERVER),
             ],
+            'storage' => \PerfSimPhp\SharedStorage::getInfo(),
         ];
     }
 

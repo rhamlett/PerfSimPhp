@@ -112,6 +112,13 @@ class MetricsController
                 'active' => $stats['currentConcurrentRequests'] > 0,
                 'concurrent' => $stats['currentConcurrentRequests'],
             ],
+            // Debug: show active simulation counts
+            '_debug' => [
+                'cpuSimCount' => count($cpuSims ?? []),
+                'blockingSimCount' => count($blockingSims ?? []),
+                'memorySimCount' => count($memorySims ?? []),
+                'slowSimCount' => count($slowSims ?? []),
+            ],
         ];
     }
 }
