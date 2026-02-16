@@ -42,19 +42,38 @@ class HealthController
      */
     public static function environment(): array
     {
-        $websiteSku = getenv('WEBSITE_SKU') ?: null;
-        $websiteSiteName = getenv('WEBSITE_SITE_NAME') ?: null;
-        $websiteInstanceId = getenv('WEBSITE_INSTANCE_ID') ?: null;
+        // Helper to get env var from multiple sources (getenv, $_SERVER, $_ENV)
+        // PHP-FPM on Azure may not populate getenv() with App Service vars
+        $getEnvVar = function(string $name): ?string {
+            $value = getenv($name);
+            if ($value !== false && $value !== '') {
+                return $value;
+            }
+            if (isset($_SERVER[$name]) && $_SERVER[$name] !== '') {
+                return $_SERVER[$name];
+            }
+            if (isset($_ENV[$name]) && $_ENV[$name] !== '') {
+                return $_ENV[$name];
+            }
+            return null;
+        };
+
+        $websiteSku = $getEnvVar('WEBSITE_SKU');
+        $websiteSiteName = $getEnvVar('WEBSITE_SITE_NAME');
+        $websiteInstanceId = $getEnvVar('WEBSITE_INSTANCE_ID');
         
         // Additional Azure env vars for SKU detection
         // WEBSITE_OWNER_NAME format: subscriptionId+resourceGroup-regionwebspace
         // WEBSITE_RESOURCE_GROUP and APP_SERVICE_PLAN can help identify tier
-        $resourceGroup = getenv('WEBSITE_RESOURCE_GROUP') ?: null;
-        $ownerName = getenv('WEBSITE_OWNER_NAME') ?: null;
-        $computeMode = getenv('WEBSITE_COMPUTE_MODE') ?: null; // Dedicated, Dynamic, etc.
-        $homeStamp = getenv('HOME_EXPANDED') ?: getenv('HOME') ?: null;
+        $resourceGroup = $getEnvVar('WEBSITE_RESOURCE_GROUP');
+        $ownerName = $getEnvVar('WEBSITE_OWNER_NAME');
+        $computeMode = $getEnvVar('WEBSITE_COMPUTE_MODE'); // Dedicated, Dynamic, etc.
+        $homeStamp = $getEnvVar('HOME_EXPANDED') ?? $getEnvVar('HOME');
 
-        $isAzure = !empty($websiteSiteName) || !empty($websiteInstanceId) || !empty($homeStamp);
+        // Azure detection: check WEBSITE_* vars (definitive) or Azure-specific paths
+        $hasWebsiteVars = !empty($websiteSiteName) || !empty($websiteInstanceId) || !empty($resourceGroup);
+        $hasAzurePath = $homeStamp && str_contains($homeStamp, '/home/site');
+        $isAzure = $hasWebsiteVars || $hasAzurePath;
         
         // Try to determine SKU from available info
         $sku = $websiteSku;
@@ -73,6 +92,46 @@ class HealthController
             'siteName' => $websiteSiteName,
             'instanceId' => $websiteInstanceId ? substr($websiteInstanceId, 0, 8) : null,
             'resourceGroup' => $resourceGroup,
+        ];
+    }
+
+    /**
+     * GET /api/health/debug-env
+     * Debug endpoint to see all WEBSITE_* environment variables (for troubleshooting)
+     */
+    public static function debugEnv(): array
+    {
+        $websiteVars = [];
+        
+        // Check getenv
+        foreach ($_ENV as $key => $value) {
+            if (str_starts_with($key, 'WEBSITE_')) {
+                $websiteVars['$_ENV'][$key] = $value;
+            }
+        }
+        
+        // Check $_SERVER
+        foreach ($_SERVER as $key => $value) {
+            if (str_starts_with($key, 'WEBSITE_')) {
+                $websiteVars['$_SERVER'][$key] = $value;
+            }
+        }
+        
+        // Try getenv for specific vars
+        $knownVars = ['WEBSITE_SKU', 'WEBSITE_SITE_NAME', 'WEBSITE_INSTANCE_ID', 'WEBSITE_RESOURCE_GROUP', 'WEBSITE_OWNER_NAME', 'WEBSITE_COMPUTE_MODE', 'HOME', 'HOME_EXPANDED'];
+        foreach ($knownVars as $var) {
+            $val = getenv($var);
+            if ($val !== false) {
+                $websiteVars['getenv'][$var] = $val;
+            }
+        }
+        
+        return [
+            'websiteVars' => $websiteVars,
+            'envCount' => [
+                '$_ENV' => count($_ENV),
+                '$_SERVER' => count($_SERVER),
+            ],
         ];
     }
 

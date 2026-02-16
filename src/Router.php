@@ -101,6 +101,9 @@ class Router
         if ($method === 'GET' && $path === '/api/health/probe') {
             return self::ok(HealthController::probe());
         }
+        if ($method === 'GET' && $path === '/api/health/debug-env') {
+            return self::ok(HealthController::debugEnv());
+        }
 
         // Metrics endpoints
         if ($method === 'GET' && $path === '/api/metrics') {
