@@ -21,6 +21,7 @@ permissions:
 
 env:
   AZURE_WEBAPP_NAME: perfsimphp
+  AZURE_RESOURCE_GROUP: rhamlettRG
   PHP_VERSION: '8.4'
 
 jobs:
@@ -57,3 +58,10 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           # Deploys the entire repo root — Azure PHP blessed image
           # uses the 'default' nginx config and 'startup.sh' from the repo
+
+      - name: Set Startup Command
+        run: |
+          az webapp config set \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --startup-file '/home/site/wwwroot/startup.sh'

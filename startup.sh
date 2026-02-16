@@ -105,8 +105,13 @@ echo "========================="
 echo "PerfSimPhp startup complete"
 
 # START PHP-FPM
-# Critical: The container will exit if this script finishes.
-# We must start the main process (PHP-FPM) in the foreground to keep it running.
-# Oryx normally does this, but when we override the startup command, we often take full control.
+# When Azure runs a custom startup script, it replaces the default entrypoint.
+# We must start nginx and php-fpm ourselves. Nginx was already reloaded above.
+# php-fpm -F runs in foreground to keep the container alive.
 echo "Starting PHP-FPM in foreground..."
+
+# First ensure nginx is running (service might not have started yet in some image versions)
+service nginx start 2>/dev/null || nginx 2>/dev/null || echo "nginx already running or started via reload"
+
+# Start php-fpm in foreground to keep container alive
 php-fpm -F
