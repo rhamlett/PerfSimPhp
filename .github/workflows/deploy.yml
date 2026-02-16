@@ -64,4 +64,4 @@ jobs:
           az webapp config set \
             --name ${{ env.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --startup-file '/home/site/wwwroot/startup.sh'
+            --startup-file 'bash /home/site/wwwroot/startup.sh'
