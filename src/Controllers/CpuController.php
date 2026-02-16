@@ -81,25 +81,21 @@ class CpuController
 
     /**
      * POST /api/simulations/cpu/stop
-     * Stops all active CPU stress simulations.
+     * Stops all active CPU stress simulations and kills any orphaned workers.
      */
     public static function stopAll(): void
     {
-        $simulations = CpuStressService::getActiveSimulations();
-        $stoppedCount = 0;
+        // Count active simulations before stopping
+        $beforeCount = count(CpuStressService::getActiveSimulations());
 
-        foreach ($simulations as $simulation) {
-            $stopped = CpuStressService::stop($simulation['id']);
-            if ($stopped) {
-                $stoppedCount++;
-            }
-        }
+        // stopAll handles everything: active simulations, orphaned workers, and nuclear kill
+        CpuStressService::stopAll();
 
         echo json_encode([
-            'message' => $stoppedCount > 0 
-                ? "Stopped {$stoppedCount} CPU stress simulation(s)" 
-                : 'No active CPU stress simulations to stop',
-            'stoppedCount' => $stoppedCount,
+            'message' => $beforeCount > 0 
+                ? "Stopped {$beforeCount} CPU stress simulation(s)" 
+                : 'CPU stress workers terminated',
+            'stoppedCount' => $beforeCount,
         ]);
     }
 

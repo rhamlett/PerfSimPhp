@@ -84,15 +84,18 @@ class CpuStressService
         $cpuCount = self::getCpuCount();
         $baseWorkers = (int) ceil(($targetLoadPercent / 100) * $cpuCount);
         
+        // Multipliers tuned for Azure App Service
+        // Azure reports more cores than available, so we need extra workers
+        // but not TOO many or we overshoot
         $multiplier = match(true) {
-            $targetLoadPercent >= 90 => 4.0,
-            $targetLoadPercent >= 75 => 3.5,
-            $targetLoadPercent >= 50 => 3.0,
-            $targetLoadPercent >= 25 => 2.5,
-            default => 2.0,
+            $targetLoadPercent >= 90 => 2.5,  // 90-100%: 2.5x workers
+            $targetLoadPercent >= 75 => 2.0,  // 75-89%: 2x workers  
+            $targetLoadPercent >= 50 => 1.75, // 50-74%: 1.75x workers
+            $targetLoadPercent >= 25 => 1.5,  // 25-49%: 1.5x workers
+            default => 1.25,                   // <25%: 1.25x workers
         };
         
-        return min(16, max(2, (int) ceil($baseWorkers * $multiplier)));
+        return min(12, max(1, (int) ceil($baseWorkers * $multiplier)));
     }
 
     /**
@@ -321,6 +324,7 @@ class CpuStressService
 
     /**
      * Stops all active CPU stress simulations.
+     * Also kills any orphaned workers and cpu-worker processes.
      */
     public static function stopAll(): void
     {
@@ -329,8 +333,32 @@ class CpuStressService
             self::stop($simulation['id']);
         }
         
-        // Also clean up any orphaned workers
+        // Always clean up orphaned workers (PIDs without active simulations)
         self::cleanupOrphanedWorkers();
+        
+        // Nuclear option: kill any remaining cpu-worker processes by name
+        // This handles cases where PID tracking failed
+        self::killAllWorkersByName();
+    }
+
+    /**
+     * Kills all cpu-worker.php processes by name.
+     * Nuclear option when PID tracking fails.
+     */
+    public static function killAllWorkersByName(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            // Windows: use wmic to find and kill php processes running cpu-worker
+            @exec('wmic process where "commandline like \'%cpu-worker%\'" call terminate 2>&1');
+        } else {
+            // Linux: pkill processes matching cpu-worker.php
+            @exec('pkill -9 -f cpu-worker.php 2>/dev/null');
+        }
+        
+        // Clear all stored PIDs since we killed everything
+        SharedStorage::delete(self::PIDS_KEY);
+        
+        error_log('[CPU Stress] Killed all cpu-worker processes by name');
     }
 
     /**

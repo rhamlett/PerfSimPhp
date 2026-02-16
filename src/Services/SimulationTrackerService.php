@@ -115,8 +115,10 @@ class SimulationTrackerService
             };
             
             // Clean up CPU worker processes when simulation expires
+            // Use nuclear option to ensure all workers are killed
             if ($sim['type'] === 'CPU_STRESS') {
                 CpuStressService::cleanupWorkers($sim['id']);
+                CpuStressService::killAllWorkersByName();
             }
             
             EventLogService::success(
