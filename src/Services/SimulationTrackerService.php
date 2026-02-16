@@ -72,18 +72,39 @@ class SimulationTrackerService
 
     /**
      * Gets all active simulations.
+     * Also cleans up expired simulations that weren't properly completed.
      */
     public static function getActiveSimulations(): array
     {
         $simulations = SharedStorage::get(self::STORAGE_KEY, []);
-        // Also clean up expired simulations
-        $now = microtime(true);
+        $now = Utils::formatTimestamp();
         $active = [];
+        $modified = false;
 
-        foreach ($simulations as $sim) {
+        foreach ($simulations as $id => $sim) {
             if ($sim['status'] === 'ACTIVE') {
-                $active[] = $sim;
+                // Check if simulation has expired
+                $scheduledEnd = $sim['scheduledEndAt'] ?? null;
+                if ($scheduledEnd && $scheduledEnd < $now) {
+                    // Mark as completed and log
+                    $simulations[$id]['status'] = 'COMPLETED';
+                    $simulations[$id]['stoppedAt'] = $now;
+                    EventLogService::info(
+                        'SIMULATION_COMPLETED',
+                        "Simulation {$sim['type']} completed (duration ended)",
+                        $id,
+                        $sim['type']
+                    );
+                    $modified = true;
+                } else {
+                    $active[] = $sim;
+                }
             }
+        }
+
+        // Save cleaned up simulations
+        if ($modified) {
+            SharedStorage::set(self::STORAGE_KEY, $simulations);
         }
 
         return $active;

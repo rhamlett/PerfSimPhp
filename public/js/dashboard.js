@@ -68,8 +68,18 @@ function initDashboard() {
     }
   };
 
-  window.onEventUpdate = function(events) {
-    renderEventLog(events);
+  window.onEventUpdate = function(eventOrEvents) {
+    // Polling client may pass single event or array
+    // Handle both cases by adding server events to the log
+    const events = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
+    for (const e of events) {
+      addEventToLog({
+        level: e.level || 'info',
+        message: e.message,
+        timestamp: e.timestamp,
+        source: 'server',
+      });
+    }
   };
 
   window.onSimulationUpdate = function(simulations) {
@@ -191,12 +201,13 @@ function formatUptime(seconds) {
 /**
  * Adds an event to the local log and renders it.
  * Used for client-side events (connection changes, restarts, etc.)
+ * and server events received via polling.
  *
- * @param {Object} event - { level: 'info'|'warning'|'error'|'success', message: string }
+ * @param {Object} event - { level: 'info'|'warning'|'error'|'success', message: string, timestamp?: string, source?: string }
  */
 function addEventToLog(event) {
   const entry = {
-    timestamp: new Date().toISOString(),
+    timestamp: event.timestamp || new Date().toISOString(),
     level: event.level || 'info',
     message: event.message,
     source: event.source || 'client',
