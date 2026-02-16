@@ -59,15 +59,6 @@ class BlockingService
             'simulationId' => $simulation['id'],
         ], $durationSeconds + 60); // TTL slightly longer than duration
 
-        // Log start
-        EventLogService::warn(
-            'SIMULATION_STARTED',
-            "Request thread blocking started for {$durationSeconds}s — probe requests will experience latency",
-            $simulation['id'],
-            'REQUEST_BLOCKING',
-            ['durationSeconds' => $durationSeconds]
-        );
-
         return $simulation;
     }
 

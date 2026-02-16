@@ -104,6 +104,17 @@ class EventLogService
         return self::log($event, $message, 'error', $simulationId, $simulationType, $details);
     }
 
+    /** Log a success-level event. */
+    public static function success(
+        string $event,
+        string $message,
+        ?string $simulationId = null,
+        ?string $simulationType = null,
+        ?array $details = null,
+    ): array {
+        return self::log($event, $message, 'success', $simulationId, $simulationType, $details);
+    }
+
     /**
      * Get all log entries.
      */
