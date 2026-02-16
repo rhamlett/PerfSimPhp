@@ -52,6 +52,16 @@ const MAX_EVENT_LOG_ENTRIES = 100;
 let activeSimulations = {};
 let lastSimulationsJson = ''; // Track last state to avoid unnecessary re-renders
 
+// Slow request state
+let slowRequestState = {
+  intervalId: null,
+  inFlight: 0,
+  completed: 0,
+  stopped: false,
+  maxRequests: 0,
+  sent: 0,
+};
+
 /**
  * Initializes the polling client callbacks.
  * Called on page load to wire up data flow from polling-client.js.
@@ -580,6 +590,7 @@ async function blockRequestThread(durationSeconds) {
 /**
  * Starts slow request simulation.
  * Creates requests that take a long time to complete via different blocking patterns.
+ * Sends multiple requests at intervals to exhaust FPM workers and cause latency degradation.
  *
  * PHP slow request patterns:
  *   - "sleep": Uses PHP sleep() — simple delay, doesn't consume CPU
@@ -592,21 +603,111 @@ async function blockRequestThread(durationSeconds) {
  * @param {string} blockingPattern - One of: sleep, cpu_intensive, file_io
  */
 async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blockingPattern) {
-  try {
-    addEventToLog({ level: 'info', message: `Starting slow request: ${delaySeconds}s delay (${blockingPattern})...` });
-    const response = await fetch('/api/simulations/slow/start', {
+  // Stop any existing slow request simulation
+  if (slowRequestState.intervalId) {
+    stopSlowRequests();
+  }
+
+  // Reset state
+  slowRequestState = {
+    intervalId: null,
+    inFlight: 0,
+    completed: 0,
+    stopped: false,
+    maxRequests: maxRequests,
+    sent: 0,
+  };
+
+  addEventToLog({ 
+    level: 'info', 
+    message: `Starting slow request simulation: ${maxRequests} requests, ${delaySeconds}s each, every ${intervalSeconds}s (${blockingPattern})` 
+  });
+  updateSlowStatus();
+
+  // Function to send a single slow request (fire and forget)
+  const sendSlowRequest = () => {
+    if (slowRequestState.stopped || slowRequestState.sent >= slowRequestState.maxRequests) {
+      // Stop interval when max reached
+      if (slowRequestState.intervalId) {
+        clearInterval(slowRequestState.intervalId);
+        slowRequestState.intervalId = null;
+      }
+      return;
+    }
+
+    slowRequestState.sent++;
+    slowRequestState.inFlight++;
+    const requestNum = slowRequestState.sent;
+    updateSlowStatus();
+
+    addEventToLog({ 
+      level: 'info', 
+      message: `Slow request #${requestNum} started (${blockingPattern}, ${delaySeconds}s)` 
+    });
+
+    fetch('/api/simulations/slow/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delaySeconds, intervalSeconds, maxRequests, blockingPattern }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      addEventToLog({ level: 'success', message: data.message || `Slow request completed: ${delaySeconds}s` });
+      body: JSON.stringify({ delaySeconds, blockingPattern }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        slowRequestState.inFlight--;
+        slowRequestState.completed++;
+        updateSlowStatus();
+        if (!slowRequestState.stopped) {
+          addEventToLog({ 
+            level: 'success', 
+            message: `Slow request #${requestNum} completed` 
+          });
+        }
+        // Check if all done
+        if (slowRequestState.completed >= slowRequestState.maxRequests && !slowRequestState.stopped) {
+          addEventToLog({ level: 'success', message: `All ${maxRequests} slow requests completed` });
+          updateSlowStatus();
+        }
+      })
+      .catch(err => {
+        slowRequestState.inFlight--;
+        updateSlowStatus();
+        addEventToLog({ 
+          level: 'error', 
+          message: `Slow request #${requestNum} failed: ${err.message}` 
+        });
+      });
+  };
+
+  // Send first request immediately
+  sendSlowRequest();
+
+  // Schedule remaining requests at intervals
+  if (maxRequests > 1) {
+    slowRequestState.intervalId = setInterval(sendSlowRequest, intervalSeconds * 1000);
+  }
+}
+
+/**
+ * Updates the slow request status display.
+ */
+function updateSlowStatus() {
+  const statusEl = document.getElementById('slow-status');
+  if (statusEl) {
+    const state = slowRequestState;
+    if (state.inFlight > 0 || (state.intervalId && state.sent < state.maxRequests)) {
+      statusEl.classList.add('active');
+      statusEl.innerHTML = `<strong>In Progress:</strong> ${state.inFlight} in-flight, ${state.completed}/${state.maxRequests} completed`;
+    } else if (state.completed > 0) {
+      statusEl.classList.add('active');
+      statusEl.innerHTML = `<strong>Done:</strong> ${state.completed}/${state.maxRequests} completed`;
+      // Hide after 5 seconds
+      setTimeout(() => {
+        if (statusEl.innerHTML.includes('Done:')) {
+          statusEl.classList.remove('active');
+        }
+      }, 5000);
     } else {
-      addEventToLog({ level: 'error', message: `Slow requests failed: ${data.error || data.message || 'Unknown error'}` });
+      statusEl.classList.remove('active');
     }
-  } catch (err) {
-    addEventToLog({ level: 'error', message: `Slow requests request failed: ${err.message}` });
   }
 }
 
@@ -614,17 +715,18 @@ async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blo
  * Stops slow request simulation.
  */
 async function stopSlowRequests() {
-  try {
-    const response = await fetch('/api/simulations/slow/stop', { method: 'POST' });
-    const data = await response.json();
-    if (response.ok) {
-      addEventToLog({ level: 'success', message: data.message || 'Slow requests stopped' });
-    } else {
-      addEventToLog({ level: 'error', message: `Stop slow requests failed: ${data.error || data.message || 'Unknown error'}` });
-    }
-  } catch (err) {
-    addEventToLog({ level: 'error', message: `Stop slow requests request failed: ${err.message}` });
+  if (slowRequestState.intervalId) {
+    clearInterval(slowRequestState.intervalId);
+    slowRequestState.intervalId = null;
   }
+  slowRequestState.stopped = true;
+
+  const inFlight = slowRequestState.inFlight;
+  addEventToLog({ 
+    level: 'warning', 
+    message: `Slow request simulation stopped (${slowRequestState.completed} completed, ${inFlight} still in-flight will complete)` 
+  });
+  updateSlowStatus();
 }
 
 /**
