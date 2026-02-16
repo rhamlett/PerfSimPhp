@@ -25,6 +25,8 @@ server {
     # Security headers
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
+    # Disable HSTS to prevent caching of HTTPS redirects during debugging
+    add_header Strict-Transport-Security "max-age=0" always;
 
     # Front controller: serve static files, fall through to index.php
     location / {
