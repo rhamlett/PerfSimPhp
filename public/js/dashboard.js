@@ -211,6 +211,7 @@ function formatUptime(seconds) {
 /**
  * Clears the event log state and DOM.
  * Called on page refresh before loading existing events.
+ * Exposed globally for polling-client.js to call.
  */
 function clearEventLog() {
   eventLog = [];
@@ -220,6 +221,8 @@ function clearEventLog() {
     container.innerHTML = '';
   }
 }
+// Expose globally for polling-client.js
+window.clearEventLog = clearEventLog;
 
 /**
  * Adds an event to the local log and renders it.
