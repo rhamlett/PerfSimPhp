@@ -50,22 +50,29 @@ class MetricsService
     }
 
     /**
-     * CPU metrics via sys_getloadavg().
+     * CPU metrics via /proc/stat for real-time measurement.
      *
-     * sys_getloadavg() returns system-wide load averages for 1, 5, and 15 minutes.
-     * This captures CPU usage from ALL processes including background CPU workers.
+     * sys_getloadavg() returns 1/5/15 minute averages which are too slow to
+     * show real-time changes. Instead, we read /proc/stat twice with a small
+     * delay to calculate actual CPU usage over that interval.
      *
-     * On Windows, sys_getloadavg() is not available, so we return 0.
+     * Falls back to sys_getloadavg() on systems without /proc/stat.
      */
     public static function getCpuMetrics(): array
     {
-        $loadAvg = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.0, 0.0, 0.0];
         $cpuCount = self::getCpuCount();
-
-        // Estimate CPU percentage from 1-minute load average vs CPU count
-        // sys_getloadavg() works on Linux (Azure App Service target)
-        // On Windows (local dev only), it returns [0,0,0] — metrics will show 0% locally
-        $usagePercent = $cpuCount > 0 ? min(100, ($loadAvg[0] / $cpuCount) * 100) : 0;
+        
+        // Try real-time measurement via /proc/stat
+        $usagePercent = self::getRealTimeCpuUsage();
+        
+        // Fallback to load average if /proc/stat not available
+        if ($usagePercent === null) {
+            $loadAvg = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.0, 0.0, 0.0];
+            $usagePercent = $cpuCount > 0 ? min(100, ($loadAvg[0] / $cpuCount) * 100) : 0;
+        }
+        
+        // Also get load averages for reference
+        $loadAvg = function_exists('sys_getloadavg') ? sys_getloadavg() : [0.0, 0.0, 0.0];
 
         return [
             'usagePercent' => round($usagePercent, 2),
@@ -74,6 +81,83 @@ class MetricsService
             'loadAvg15m' => round($loadAvg[2], 2),
             'cpuCount' => $cpuCount,
         ];
+    }
+
+    /**
+     * Gets real-time CPU usage by sampling /proc/stat twice.
+     * Returns percentage (0-100) or null if not available.
+     */
+    private static function getRealTimeCpuUsage(): ?float
+    {
+        if (!is_readable('/proc/stat')) {
+            return null;
+        }
+        
+        // Read first sample
+        $stat1 = self::readProcStat();
+        if ($stat1 === null) {
+            return null;
+        }
+        
+        // Brief delay for comparison (50ms = fast enough for responsive charts)
+        usleep(50000);
+        
+        // Read second sample
+        $stat2 = self::readProcStat();
+        if ($stat2 === null) {
+            return null;
+        }
+        
+        // Calculate CPU usage between samples
+        $idleDelta = $stat2['idle'] - $stat1['idle'];
+        $totalDelta = $stat2['total'] - $stat1['total'];
+        
+        if ($totalDelta <= 0) {
+            return 0.0;
+        }
+        
+        // Usage = (1 - idle/total) * 100
+        return (1 - ($idleDelta / $totalDelta)) * 100;
+    }
+
+    /**
+     * Reads aggregate CPU stats from /proc/stat.
+     */
+    private static function readProcStat(): ?array
+    {
+        $contents = @file_get_contents('/proc/stat');
+        if ($contents === false) {
+            return null;
+        }
+        
+        // First line is aggregate: cpu user nice system idle iowait irq softirq steal guest guest_nice
+        $lines = explode("\n", $contents);
+        foreach ($lines as $line) {
+            if (strpos($line, 'cpu ') === 0) {
+                $parts = preg_split('/\s+/', trim($line));
+                if (count($parts) >= 5) {
+                    // parts: [cpu, user, nice, system, idle, iowait, irq, softirq, ...]
+                    $user = (int) $parts[1];
+                    $nice = (int) $parts[2];
+                    $system = (int) $parts[3];
+                    $idle = (int) $parts[4];
+                    $iowait = isset($parts[5]) ? (int) $parts[5] : 0;
+                    
+                    // Total = all CPU time
+                    $total = $user + $nice + $system + $idle + $iowait;
+                    for ($i = 6; $i < count($parts); $i++) {
+                        $total += (int) $parts[$i];
+                    }
+                    
+                    return [
+                        'idle' => $idle + $iowait, // Include iowait as idle
+                        'total' => $total,
+                    ];
+                }
+            }
+        }
+        
+        return null;
     }
 
     /**
