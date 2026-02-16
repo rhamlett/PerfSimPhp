@@ -27,6 +27,8 @@ declare(strict_types=1);
 namespace PerfSimPhp\Services;
 
 use PerfSimPhp\SharedStorage;
+use PerfSimPhp\Services\EventLogService;
+use PerfSimPhp\Services\SimulationTrackerService;
 
 class BlockingService
 {
@@ -64,8 +66,7 @@ class BlockingService
 
     /**
      * Check if blocking mode is currently active.
-     * If blocking has expired, cleans up the blocking mode key.
-     * (Simulation completion is handled by SimulationTrackerService)
+     * If blocking has expired, cleans up and logs completion.
      *
      * @return array|null Blocking mode info if active, null otherwise
      */
@@ -77,9 +78,23 @@ class BlockingService
         }
 
         if (microtime(true) > $mode['endTime']) {
-            // Blocking period has ended - just clean up the key
-            // SimulationTrackerService will handle marking the simulation as completed
+            // Blocking period has ended - clean up and log completion
             SharedStorage::delete(self::BLOCKING_MODE_KEY);
+            
+            // Log completion event
+            $duration = $mode['durationSeconds'] ?? 0;
+            EventLogService::success(
+                'SIMULATION_COMPLETED',
+                "Request thread blocking completed after {$duration}s",
+                $mode['simulationId'] ?? null,
+                'REQUEST_BLOCKING'
+            );
+            
+            // Mark simulation as completed in tracker
+            if (isset($mode['simulationId'])) {
+                SimulationTrackerService::completeSimulation($mode['simulationId']);
+            }
+            
             return null;
         }
 
