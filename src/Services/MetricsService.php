@@ -97,11 +97,15 @@ class MetricsService
         
         // Get actual RSS from /proc/self/status (more accurate than memory_get_usage)
         $rssMb = self::getProcessRss();
+        
+        // Get simulated memory allocation from shared storage
+        $simulatedMb = MemoryPressureService::getTotalAllocatedMb();
 
         $metrics = [
-            'usedMb' => $usedMb,
+            'usedMb' => $usedMb + $simulatedMb, // Include simulated allocations in working set
             'rssMb' => $rssMb,
             'phpUsageMb' => $usedMb,
+            'simulatedMb' => $simulatedMb,
             'phpPeakMb' => round($phpPeak / 1024 / 1024, 2),
             'phpUsageRealMb' => round($phpUsageReal / 1024 / 1024, 2),
             'memoryLimitMb' => self::getMemoryLimitMb(),

@@ -410,6 +410,7 @@ function updateActiveSimulations(simulations) {
  */
 async function startCpuStress(targetLoadPercent, durationSeconds) {
   try {
+    addEventToLog({ level: 'info', message: `Starting CPU stress: ${targetLoadPercent}% for ${durationSeconds}s...` });
     const response = await fetch('/api/simulations/cpu/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -451,6 +452,7 @@ async function stopCpuStress() {
  */
 async function startMemoryPressure(sizeMb) {
   try {
+    addEventToLog({ level: 'info', message: `Allocating ${sizeMb}MB memory...` });
     const response = await fetch('/api/simulations/memory/allocate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

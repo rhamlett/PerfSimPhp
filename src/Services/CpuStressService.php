@@ -118,7 +118,22 @@ class CpuStressService
         int $durationSeconds
     ): void {
         $cpuCount = self::getCpuCount();
-        $numProcesses = max(1, (int) round(($targetLoadPercent / 100) * $cpuCount));
+        
+        // Azure App Service containers often have access to fewer cores than reported.
+        // To achieve visible CPU load in metrics, we spawn extra workers.
+        // Base formula: (targetLoad/100) * cpuCount
+        // For high loads (>75%), add extra workers to ensure saturation
+        $baseWorkers = (int) round(($targetLoadPercent / 100) * $cpuCount);
+        
+        // Add extra workers for high loads to ensure visible impact in Azure metrics
+        $extraMultiplier = 1.0;
+        if ($targetLoadPercent >= 90) {
+            $extraMultiplier = 2.0; // Double workers for 90-100%
+        } elseif ($targetLoadPercent >= 75) {
+            $extraMultiplier = 1.5; // 50% more workers for 75-89%
+        }
+        
+        $numProcesses = max(1, (int) round($baseWorkers * $extraMultiplier));
 
         $workerScript = dirname(__DIR__, 2) . '/workers/cpu-worker.php';
         $pids = [];
