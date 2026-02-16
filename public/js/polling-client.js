@@ -97,6 +97,12 @@ function onConnected() {
   startEventsPolling();
   startProbePolling();
 
+  // Add initialization events to the log
+  if (typeof addEventToLog === 'function') {
+    addEventToLog({ level: 'info', message: 'Dashboard initialized' });
+    addEventToLog({ level: 'success', message: 'Connected to metrics hub' });
+  }
+
   // Notify dashboard of connection
   if (typeof onSocketConnected === 'function') {
     onSocketConnected();

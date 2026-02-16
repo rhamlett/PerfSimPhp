@@ -93,15 +93,17 @@ class MetricsService
         $systemTotal = self::getSystemMemory();
 
         $usedMb = round($phpUsage / 1024 / 1024, 2);
-        $rssMb = round($phpUsageReal / 1024 / 1024, 2);
         $totalSystemMb = round($systemTotal / 1024 / 1024, 2);
+        
+        // Get actual RSS from /proc/self/status (more accurate than memory_get_usage)
+        $rssMb = self::getProcessRss();
 
         $metrics = [
             'usedMb' => $usedMb,
             'rssMb' => $rssMb,
             'phpUsageMb' => $usedMb,
             'phpPeakMb' => round($phpPeak / 1024 / 1024, 2),
-            'phpUsageRealMb' => $rssMb,
+            'phpUsageRealMb' => round($phpUsageReal / 1024 / 1024, 2),
             'memoryLimitMb' => self::getMemoryLimitMb(),
             'totalSystemMb' => $totalSystemMb,
         ];
@@ -127,7 +129,15 @@ class MetricsService
      */
     public static function getProcessMetrics(): array
     {
-        $activeWorkers = count(SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING'));
+        $activeBlockingSimulations = count(SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING'));
+        
+        // Try to get FPM pool status if available
+        // Note: php-fpm status page would need to be configured, so we estimate
+        // based on active blocking simulations plus 1 for this request
+        $busyWorkers = $activeBlockingSimulations;
+        
+        // Get RSS (Resident Set Size) from /proc if available
+        $rssMb = self::getProcessRss();
 
         return [
             'pid' => getmypid(),
@@ -135,8 +145,26 @@ class MetricsService
             'sapi' => PHP_SAPI,
             'uptime' => self::getUptime(),
             'maxExecutionTime' => (int) ini_get('max_execution_time'),
-            'activeWorkers' => $activeWorkers,
+            'activeWorkers' => $busyWorkers,
+            'rssMb' => $rssMb,
         ];
+    }
+    
+    /**
+     * Get RSS memory of current process from /proc/self/status.
+     */
+    private static function getProcessRss(): float
+    {
+        // Try /proc/self/status on Linux
+        if (is_readable('/proc/self/status')) {
+            $status = file_get_contents('/proc/self/status');
+            if (preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $matches)) {
+                return round((int)$matches[1] / 1024, 2); // Convert kB to MB
+            }
+        }
+        
+        // Fallback to memory_get_usage
+        return round(memory_get_usage(true) / 1024 / 1024, 2);
     }
 
     /**

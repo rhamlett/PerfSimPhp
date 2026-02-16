@@ -77,8 +77,9 @@ function initDashboard() {
   };
 
   window.onProbeLatency = function(data) {
-    if (typeof onProbeLatency === 'function' && window.onProbeLatency !== arguments.callee) {
-      // charts.js defines its own onProbeLatency — call it
+    // Call charts.js probe handler if available
+    if (typeof window.chartsOnProbeLatency === 'function') {
+      window.chartsOnProbeLatency(data);
     }
   };
 
