@@ -81,12 +81,8 @@ class AdminController
      */
     public static function events(): void
     {
-        // Trigger cleanup of expired blocking mode (logs completion event)
-        // Must be called BEFORE getting events so the completion event is included
-        BlockingService::getBlockingMode();
-        
-        // Trigger cleanup of other expired simulations
-        SimulationTrackerService::getActiveSimulations();
+        // Note: Cleanup is now handled by startup cleanup and explicit stop actions.
+        // We no longer trigger cleanup on every events poll to avoid CPU overhead.
         
         $limit = 50;
         if (isset($_GET['limit']) && is_numeric($_GET['limit'])) {

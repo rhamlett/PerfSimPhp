@@ -67,8 +67,6 @@ class BlockingService
     /**
      * Check if blocking mode is currently active.
      * If blocking has expired, cleans up and logs completion.
-     * Also cleans up any stale REQUEST_BLOCKING simulations that were left behind
-     * if the blocking mode key was deleted by TTL before cleanup could run.
      *
      * @return array|null Blocking mode info if active, null otherwise
      */
@@ -76,10 +74,8 @@ class BlockingService
     {
         $mode = SharedStorage::get(self::BLOCKING_MODE_KEY);
         
-        // If blocking mode key doesn't exist, clean up any stale simulations
-        // This handles the case where APCu/file TTL deleted the key before cleanup
+        // No blocking mode active
         if (!$mode || !isset($mode['endTime'])) {
-            self::cleanupStaleSimulations();
             return null;
         }
 
@@ -157,42 +153,6 @@ class BlockingService
                 $mode['simulationId'],
                 'REQUEST_BLOCKING'
             );
-        }
-    }
-
-    /**
-     * Clean up stale REQUEST_BLOCKING simulations that were left behind.
-     * This handles the case where the blocking mode key was deleted by TTL
-     * (APCu or file storage) before the cleanup code could run.
-     */
-    private static function cleanupStaleSimulations(): void
-    {
-        // Get all REQUEST_BLOCKING simulations that are still marked ACTIVE
-        // but have passed their scheduled end time
-        $simulations = SimulationTrackerService::getSimulationsInTimeWindow('REQUEST_BLOCKING');
-        
-        // If there are any active-but-expired blocking simulations, they're stale
-        // The getSimulationsInTimeWindow checks scheduledEndAt, so anything returned
-        // should still be within its window. But we also need to check for simulations
-        // that are ACTIVE but past their scheduledEndAt (not cleaned up).
-        $allSims = SharedStorage::get('perfsim_simulations', []);
-        $now = \PerfSimPhp\Utils::formatTimestamp();
-        
-        foreach ($allSims as $id => $sim) {
-            if ($sim['type'] === 'REQUEST_BLOCKING' && 
-                $sim['status'] === 'ACTIVE' &&
-                isset($sim['scheduledEndAt']) &&
-                $sim['scheduledEndAt'] < $now) {
-                // This simulation is stale - mark it as completed
-                SimulationTrackerService::completeSimulation($id);
-                $duration = $sim['parameters']['durationSeconds'] ?? 0;
-                EventLogService::success(
-                    'SIMULATION_COMPLETED',
-                    "Request thread blocking completed after {$duration}s (cleanup)",
-                    $id,
-                    'REQUEST_BLOCKING'
-                );
-            }
         }
     }
 }
