@@ -73,6 +73,7 @@ class SimulationTrackerService
     /**
      * Gets all active simulations.
      * Also cleans up expired simulations that weren't properly completed.
+     * Uses atomic addOnce to prevent duplicate completion logs from race conditions.
      */
     public static function getActiveSimulations(): array
     {
@@ -80,41 +81,51 @@ class SimulationTrackerService
         $now = Utils::formatTimestamp();
         $active = [];
         $modified = false;
+        $toLog = [];
 
         foreach ($simulations as $id => $sim) {
             if ($sim['status'] === 'ACTIVE') {
                 // Check if simulation has expired
                 $scheduledEnd = $sim['scheduledEndAt'] ?? null;
                 if ($scheduledEnd && $scheduledEnd < $now) {
-                    // Mark as completed and log
+                    // Mark as completed
                     $simulations[$id]['status'] = 'COMPLETED';
                     $simulations[$id]['stoppedAt'] = $now;
-                    
-                    // Format completion message based on simulation type
-                    $duration = $sim['parameters']['durationSeconds'] ?? null;
-                    $message = match($sim['type']) {
-                        'REQUEST_BLOCKING' => "Request thread blocking completed" . ($duration ? " after {$duration}s" : ""),
-                        'CPU_STRESS' => "CPU stress simulation completed" . ($duration ? " after {$duration}s" : ""),
-                        'SLOW_REQUEST' => "Slow request simulation completed",
-                        default => "{$sim['type']} simulation completed",
-                    };
-                    
-                    EventLogService::info(
-                        'SIMULATION_COMPLETED',
-                        $message,
-                        $id,
-                        $sim['type']
-                    );
                     $modified = true;
+                    
+                    // Use atomic addOnce to claim logging rights (prevents duplicates)
+                    // Only one worker will succeed in adding this key
+                    $logKey = "perfsim_completion_logged_{$id}";
+                    if (SharedStorage::addOnce($logKey, true, 3600)) {
+                        $toLog[] = $sim;
+                    }
                 } else {
                     $active[] = $sim;
                 }
             }
         }
 
-        // Save cleaned up simulations
+        // Save changes
         if ($modified) {
             SharedStorage::set(self::STORAGE_KEY, $simulations);
+        }
+
+        // Log completion messages for simulations we claimed
+        foreach ($toLog as $sim) {
+            $duration = $sim['parameters']['durationSeconds'] ?? null;
+            $message = match($sim['type']) {
+                'REQUEST_BLOCKING' => "Request thread blocking completed" . ($duration ? " after {$duration}s" : ""),
+                'CPU_STRESS' => "CPU stress simulation completed" . ($duration ? " after {$duration}s" : ""),
+                'SLOW_REQUEST' => "Slow request simulation completed",
+                default => "{$sim['type']} simulation completed",
+            };
+            
+            EventLogService::info(
+                'SIMULATION_COMPLETED',
+                $message,
+                $sim['id'],
+                $sim['type']
+            );
         }
 
         return $active;

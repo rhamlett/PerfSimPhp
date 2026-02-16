@@ -45,10 +45,12 @@ let currentServerPid = null;
 
 // Event log state
 let eventLog = [];
+let seenEventIds = new Set(); // Track event IDs to prevent duplicates
 const MAX_EVENT_LOG_ENTRIES = 100;
 
 // Active simulations tracking
 let activeSimulations = {};
+let lastSimulationsJson = ''; // Track last state to avoid unnecessary re-renders
 
 /**
  * Initializes the polling client callbacks.
@@ -73,7 +75,15 @@ function initDashboard() {
     // Handle both cases by adding server events to the log
     const events = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
     for (const e of events) {
+      // Skip if we've already seen this event (by ID)
+      if (e.id && seenEventIds.has(e.id)) {
+        continue;
+      }
+      if (e.id) {
+        seenEventIds.add(e.id);
+      }
       addEventToLog({
+        id: e.id,
         level: e.level || 'info',
         message: e.message,
         timestamp: e.timestamp,
@@ -197,6 +207,19 @@ function formatUptime(seconds) {
 // =========================================================================
 // EVENT LOG
 // =========================================================================
+
+/**
+ * Clears the event log state and DOM.
+ * Called on page refresh before loading existing events.
+ */
+function clearEventLog() {
+  eventLog = [];
+  seenEventIds.clear();
+  const container = document.getElementById('event-log');
+  if (container) {
+    container.innerHTML = '';
+  }
+}
 
 /**
  * Adds an event to the local log and renders it.
@@ -342,6 +365,12 @@ function escapeHtml(str) {
  *   Shape: { cpu: { active, ... }, memory: { active, ... }, ... }
  */
 function updateActiveSimulations(simulations) {
+  // Only update DOM if simulations have changed (prevents blinking)
+  const newJson = JSON.stringify(simulations);
+  if (newJson === lastSimulationsJson) {
+    return; // No change, skip re-render
+  }
+  lastSimulationsJson = newJson;
   activeSimulations = simulations;
 
   const container = document.getElementById('active-simulations');

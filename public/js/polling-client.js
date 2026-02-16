@@ -238,6 +238,11 @@ function startEventsPolling() {
  * This ensures we see the current event history, not just new events.
  */
 function loadExistingEvents() {
+  // Clear existing event log state in dashboard (handles page refresh)
+  if (typeof clearEventLog === 'function') {
+    clearEventLog();
+  }
+  
   fetch('/api/admin/events?limit=50', { cache: 'no-store' })
     .then(response => {
       if (!response.ok) throw new Error('Events fetch failed');

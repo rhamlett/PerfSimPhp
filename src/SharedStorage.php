@@ -109,6 +109,26 @@ class SharedStorage
     }
 
     /**
+     * Atomically add a value only if the key doesn't exist.
+     * Returns true if the value was added, false if the key already existed.
+     * This is truly atomic and prevents race conditions.
+     *
+     * @param string $key Storage key
+     * @param mixed $value Value to store
+     * @param int $ttl Time-to-live in seconds (0 = forever)
+     * @return bool True if added, false if key already existed
+     */
+    public static function addOnce(string $key, mixed $value, int $ttl = 0): bool
+    {
+        if (self::hasApcu()) {
+            // apcu_add returns true only if the key didn't exist
+            return apcu_add($key, $value, $ttl);
+        }
+
+        return self::fileAddOnce($key, $value);
+    }
+
+    /**
      * Atomically modify a value (read-modify-write with locking).
      *
      * @param string $key Storage key
@@ -189,6 +209,25 @@ class SharedStorage
         if (file_exists($file)) {
             @unlink($file);
         }
+    }
+
+    private static function fileAddOnce(string $key, mixed $value): bool
+    {
+        $file = self::filePath($key);
+        
+        // Use exclusive create mode (x) which fails if file exists
+        // This makes the operation atomic
+        $fp = @fopen($file, 'x');
+        if (!$fp) {
+            return false; // File already exists
+        }
+
+        flock($fp, LOCK_EX);
+        fwrite($fp, json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return true;
     }
 
     private static function fileModify(string $key, callable $modifier, mixed $default): mixed
