@@ -24,6 +24,10 @@ NGINX_CONF="/home/site/wwwroot/default"
 if [ -f "$NGINX_CONF" ]; then
     cp "$NGINX_CONF" /etc/nginx/sites-available/default
     echo "Custom Nginx configuration applied"
+    # Reload nginx to pick up the new configuration
+    if command -v nginx &> /dev/null; then
+        nginx -s reload 2>/dev/null && echo "Nginx reloaded successfully" || echo "Nginx reload skipped (not yet running)"
+    fi
 fi
 
 # Copy .user.ini to the document root (public/) where PHP-FPM reads it
