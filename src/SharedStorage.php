@@ -90,7 +90,7 @@ class SharedStorage
             return;
         }
 
-        self::fileSet($key, $value);
+        self::fileSet($key, $value, $ttl);
     }
 
     /**
@@ -184,20 +184,39 @@ class SharedStorage
         }
 
         $data = json_decode($contents, true);
-        return $data ?? $default;
+        if (!is_array($data)) {
+            return $default;
+        }
+
+        // Check for TTL expiration (file-based TTL support)
+        if (isset($data['__ttl_expires_at']) && microtime(true) > $data['__ttl_expires_at']) {
+            // TTL expired - delete file and return default
+            fclose(fopen($file, 'r')); // Release any handles
+            self::fileDelete($key);
+            return $default;
+        }
+
+        // Return the actual value (strip TTL metadata)
+        return $data['__value'] ?? $data;
     }
 
-    private static function fileSet(string $key, mixed $value): void
+    private static function fileSet(string $key, mixed $value, int $ttl = 0): void
     {
         $file = self::filePath($key);
         $fp = fopen($file, 'c');
         if (!$fp) {
+            error_log("[SharedStorage] Failed to open file for writing: {$file}");
             return;
         }
 
+        // Wrap value with TTL metadata if TTL is set
+        $data = $ttl > 0 
+            ? ['__value' => $value, '__ttl_expires_at' => microtime(true) + $ttl]
+            : $value;
+
         flock($fp, LOCK_EX);
         ftruncate($fp, 0);
-        fwrite($fp, json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        fwrite($fp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         fflush($fp);
         flock($fp, LOCK_UN);
         fclose($fp);
@@ -207,7 +226,10 @@ class SharedStorage
     {
         $file = self::filePath($key);
         if (file_exists($file)) {
-            @unlink($file);
+            $result = unlink($file);
+            if (!$result) {
+                error_log("[SharedStorage] Failed to delete file: {$file}");
+            }
         }
     }
 
