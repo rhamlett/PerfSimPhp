@@ -111,8 +111,12 @@ class Router
         }
 
         // CPU simulation endpoints
-        if ($method === 'POST' && $path === '/api/simulations/cpu') {
+        if ($method === 'POST' && ($path === '/api/simulations/cpu' || $path === '/api/simulations/cpu/start')) {
             CpuController::start();
+            return null;
+        }
+        if ($method === 'POST' && $path === '/api/simulations/cpu/stop') {
+            CpuController::stopAll();
             return null;
         }
         if ($method === 'GET' && $path === '/api/simulations/cpu') {
@@ -125,8 +129,12 @@ class Router
         }
 
         // Memory simulation endpoints
-        if ($method === 'POST' && $path === '/api/simulations/memory') {
+        if ($method === 'POST' && ($path === '/api/simulations/memory' || $path === '/api/simulations/memory/allocate')) {
             MemoryController::allocate();
+            return null;
+        }
+        if ($method === 'POST' && $path === '/api/simulations/memory/release') {
+            MemoryController::releaseAll();
             return null;
         }
         if ($method === 'GET' && $path === '/api/simulations/memory') {
@@ -139,7 +147,7 @@ class Router
         }
 
         // Blocking simulation endpoint (replaces Node.js "event loop blocking")
-        if ($method === 'POST' && $path === '/api/simulations/blocking') {
+        if ($method === 'POST' && ($path === '/api/simulations/blocking' || $path === '/api/simulations/blocking/start')) {
             BlockingController::block();
             return null;
         }
@@ -147,6 +155,14 @@ class Router
         // Slow request endpoint
         if ($method === 'GET' && $path === '/api/simulations/slow') {
             SlowController::slow();
+            return null;
+        }
+        if ($method === 'POST' && ($path === '/api/simulations/slow' || $path === '/api/simulations/slow/start')) {
+            SlowController::start();
+            return null;
+        }
+        if ($method === 'POST' && $path === '/api/simulations/slow/stop') {
+            SlowController::stop();
             return null;
         }
 
@@ -163,7 +179,7 @@ class Router
             CrashController::exception();
             return null;
         }
-        if ($method === 'POST' && $path === '/api/simulations/crash/memory') {
+        if ($method === 'POST' && ($path === '/api/simulations/crash/memory' || $path === '/api/simulations/crash/oom')) {
             CrashController::memory();
             return null;
         }

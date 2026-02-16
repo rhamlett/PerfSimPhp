@@ -51,4 +51,39 @@ class SlowController
             'timestamp' => date('c'),
         ]);
     }
+
+    /**
+     * POST /api/simulations/slow/start
+     * Starts a slow request with JSON body parameters.
+     */
+    public static function start(): void
+    {
+        $body = json_decode(file_get_contents('php://input'), true) ?? [];
+        $params = Validation::validateSlowRequestParams($body);
+
+        // Execute the slow request (this blocks synchronously)
+        $simulation = SlowRequestService::delay($params);
+
+        http_response_code(201);
+        echo json_encode([
+            'id' => $simulation['id'],
+            'type' => $simulation['type'],
+            'message' => "Slow request started: {$params['delaySeconds']}s using {$params['blockingPattern']} pattern",
+            'status' => $simulation['status'],
+            'parameters' => $params,
+            'timestamp' => date('c'),
+        ]);
+    }
+
+    /**
+     * POST /api/simulations/slow/stop
+     * Stops slow requests (no-op since slow requests are synchronous and self-terminating).
+     */
+    public static function stop(): void
+    {
+        echo json_encode([
+            'message' => 'Slow request simulation acknowledged (requests are synchronous and self-terminating)',
+            'timestamp' => date('c'),
+        ]);
+    }
 }

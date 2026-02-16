@@ -80,6 +80,34 @@ class MemoryController
     }
 
     /**
+     * POST /api/simulations/memory/release
+     * Releases all memory allocations.
+     */
+    public static function releaseAll(): void
+    {
+        $allocations = MemoryPressureService::getActiveAllocations();
+        $releasedCount = 0;
+        $releasedMb = 0;
+
+        foreach ($allocations as $allocation) {
+            $result = MemoryPressureService::release($allocation['id']);
+            if ($result) {
+                $releasedCount++;
+                $releasedMb += $result['sizeMb'] ?? 0;
+            }
+        }
+
+        echo json_encode([
+            'message' => $releasedCount > 0 
+                ? "Released {$releasedCount} allocation(s), {$releasedMb}MB total" 
+                : 'No active memory allocations to release',
+            'releasedCount' => $releasedCount,
+            'releasedMb' => $releasedMb,
+            'totalAllocatedMb' => MemoryPressureService::getTotalAllocatedMb(),
+        ]);
+    }
+
+    /**
      * GET /api/simulations/memory
      * Lists active memory allocations.
      */
