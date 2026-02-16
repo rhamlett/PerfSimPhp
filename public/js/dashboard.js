@@ -134,16 +134,10 @@ function updateDashboard(metrics) {
   // Server connection status
   updateConnectionStatus(true);
 
-  // Detect PHP-FPM worker restart (PID change)
-  if (metrics.process?.pid && currentServerPid && metrics.process.pid !== currentServerPid) {
-    addEventToLog({
-      level: 'warning',
-      message: `PHP-FPM worker restarted (PID changed: ${currentServerPid} → ${metrics.process.pid})`
-    });
-  }
-  if (metrics.process?.pid) {
-    currentServerPid = metrics.process.pid;
-  }
+  // NOTE: In PHP-FPM, each request may be handled by a different worker from the pool,
+  // so PID changes are normal pool rotation, not restarts. We track the FPM master PID
+  // if available, but don't log worker PID changes as "restarts" since that would spam
+  // the log during normal operation.
 
   // Update uptime display
   const uptimeEl = document.getElementById('server-uptime');
