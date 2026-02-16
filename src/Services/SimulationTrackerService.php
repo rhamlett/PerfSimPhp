@@ -101,6 +101,25 @@ class SimulationTrackerService
     }
 
     /**
+     * Gets simulations of a type that are within their scheduled time window,
+     * regardless of current status. Useful for blocking simulations where the
+     * "ACTIVE" status only exists during the synchronous blocking period.
+     */
+    public static function getSimulationsInTimeWindow(string $type): array
+    {
+        $simulations = SharedStorage::get(self::STORAGE_KEY, []);
+        $now = Utils::formatTimestamp();
+        
+        return array_values(array_filter(
+            $simulations,
+            fn(array $sim) => 
+                $sim['type'] === $type &&
+                $sim['startedAt'] <= $now &&
+                ($sim['scheduledEndAt'] ?? '9999') >= $now
+        ));
+    }
+
+    /**
      * Stops a simulation (user-initiated).
      */
     public static function stopSimulation(string $id): ?array

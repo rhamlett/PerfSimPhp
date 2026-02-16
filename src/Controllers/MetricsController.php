@@ -66,11 +66,12 @@ class MetricsController
             $workDone['cpu'] = $iterations;
         }
         
-        // Blocking active: Do real CPU-bound blocking work (same as BlockingService)
-        $blockingSims = SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING');
+        // Blocking: Check if any blocking simulations are within their time window
+        // Unlike CPU stress, blocking is synchronous so we use time window instead of ACTIVE status
+        $blockingSims = SimulationTrackerService::getSimulationsInTimeWindow('REQUEST_BLOCKING');
         if (count($blockingSims) > 0) {
             // Do substantial CPU-bound work that creates visible latency
-            // Each active blocking sim adds ~100-200ms of real hash computation
+            // Each blocking sim in window adds ~100-200ms of real hash computation
             // Using high PBKDF2 iterations (10000) to match BlockingService
             $iterations = count($blockingSims) * rand(10, 20);
             for ($i = 0; $i < $iterations; $i++) {
