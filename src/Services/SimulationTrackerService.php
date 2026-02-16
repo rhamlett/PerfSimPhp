@@ -126,13 +126,37 @@ class SimulationTrackerService
 
     /**
      * Gets active simulations of a specific type.
+     * Uses read-only fast path for probe endpoints.
      */
     public static function getActiveSimulationsByType(string $type): array
     {
         return array_values(array_filter(
-            self::getActiveSimulations(),
+            self::getActiveSimulationsReadOnly(),
             fn(array $sim) => $sim['type'] === $type
         ));
+    }
+
+    /**
+     * Fast read-only check for active simulations.
+     * Does NOT do cleanup - use for high-frequency polling like probes.
+     */
+    public static function getActiveSimulationsReadOnly(): array
+    {
+        $simulations = SharedStorage::get(self::STORAGE_KEY, []);
+        $now = Utils::formatTimestamp();
+        $active = [];
+
+        foreach ($simulations as $sim) {
+            if ($sim['status'] === 'ACTIVE') {
+                // Check if not expired (but don't clean up)
+                $scheduledEnd = $sim['scheduledEndAt'] ?? null;
+                if (!$scheduledEnd || $scheduledEnd >= $now) {
+                    $active[] = $sim;
+                }
+            }
+        }
+
+        return $active;
     }
 
     /**

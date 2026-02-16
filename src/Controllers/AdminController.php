@@ -80,6 +80,10 @@ class AdminController
      */
     public static function events(): void
     {
+        // Trigger cleanup of expired simulations (logs completion events)
+        // This runs on event poll (every 2s) so completions appear promptly
+        SimulationTrackerService::getActiveSimulations();
+        
         $limit = 50;
         if (isset($_GET['limit']) && is_numeric($_GET['limit'])) {
             $limit = max(1, min(100, (int) $_GET['limit']));

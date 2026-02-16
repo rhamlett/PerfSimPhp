@@ -145,40 +145,17 @@ class MetricsService
     }
 
     /**
-     * Gets real-time CPU usage by sampling /proc/stat twice.
+     * Gets real-time CPU usage using load average.
+     * 
+     * Note: PHP-FPM has isolated requests, so we can't cache samples across requests.
+     * Load average (1-min) is the best available metric without blocking.
      * Returns percentage (0-100) or null if not available.
      */
     private static function getRealTimeCpuUsage(): ?float
     {
-        if (!is_readable('/proc/stat')) {
-            return null;
-        }
-        
-        // Read first sample
-        $stat1 = self::readProcStat();
-        if ($stat1 === null) {
-            return null;
-        }
-        
-        // Brief delay for comparison (50ms = fast enough for responsive charts)
-        usleep(50000);
-        
-        // Read second sample
-        $stat2 = self::readProcStat();
-        if ($stat2 === null) {
-            return null;
-        }
-        
-        // Calculate CPU usage between samples
-        $idleDelta = $stat2['idle'] - $stat1['idle'];
-        $totalDelta = $stat2['total'] - $stat1['total'];
-        
-        if ($totalDelta <= 0) {
-            return 0.0;
-        }
-        
-        // Usage = (1 - idle/total) * 100
-        return (1 - ($idleDelta / $totalDelta)) * 100;
+        // Use load average - no blocking delay needed
+        // Each PHP-FPM request is isolated, so we can't cache samples between requests
+        return null; // Let getCpuMetrics use load average fallback
     }
 
     /**
