@@ -56,6 +56,18 @@ if [ -f "$NGINX_CUSTOM" ]; then
         echo "nginx config test: OK"
         service nginx reload
         echo "nginx reloaded"
+        
+        # Forensic: Check active config and root paths
+        echo "=== Nginx Forensic Audit ==="
+        echo "Checking /etc/nginx/nginx.conf includes:"
+        grep -E "include|root" /etc/nginx/nginx.conf || echo "grep failed"
+        
+        echo "Searching for config files setting root to /usr/share/nginx/html:"
+        grep -r "/usr/share/nginx/html" /etc/nginx/ || echo "No explicit match found."
+        
+        echo "Searching for 'server' blocks:"
+        grep -r "server {" /etc/nginx/ | head -n 10
+        echo "=============================="
     else
         echo "nginx config test: FAILED"
         echo "--- Nginx Error Log ---"
