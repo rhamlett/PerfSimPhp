@@ -64,6 +64,10 @@ nginx -t
 # Start Nginx service (or reload if it survived)
 service nginx start || service nginx reload
 
+echo "--- Process Check (netstat) ---"
+# Check what is listening
+netstat -tulpn || ss -tulpn
+
 echo "--- Internal Connectivity Check ---"
 curl -I http://localhost:8080 || echo "Curl to 8080 failed"
 curl -I http://localhost:80 || echo "Curl to 80 failed"
