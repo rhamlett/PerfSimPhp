@@ -76,11 +76,6 @@ class MetricsService
         $blockingMode = BlockingService::getBlockingMode();
         $blockingActive = $blockingMode !== null;
         $blockingDuration = $blockingMode['durationSeconds'] ?? 0;
-        // Calculate remaining time for display
-        $blockingRemaining = 0;
-        if ($blockingMode && isset($blockingMode['endTime'])) {
-            $blockingRemaining = max(0, (int)($blockingMode['endTime'] - microtime(true)));
-        }
 
         // Slow request simulations
         $slowSims = SimulationTrackerService::getActiveSimulationsByType('SLOW_REQUEST');
@@ -101,7 +96,6 @@ class MetricsService
             'blocking' => [
                 'active' => $blockingActive,
                 'duration' => $blockingDuration,
-                'remaining' => $blockingRemaining,
             ],
             'slowRequests' => [
                 'active' => $slowActive,

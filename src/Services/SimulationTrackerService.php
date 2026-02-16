@@ -73,37 +73,37 @@ class SimulationTrackerService
     /**
      * Gets all active simulations.
      * Also cleans up expired simulations that weren't properly completed.
-     * Uses atomic modify to prevent race conditions with duplicate logging.
      */
     public static function getActiveSimulations(): array
     {
+        $simulations = SharedStorage::get(self::STORAGE_KEY, []);
         $now = Utils::formatTimestamp();
         $active = [];
         $toLog = [];
+        $modified = false;
 
-        // Use atomic modify to prevent race conditions
-        SharedStorage::modify(self::STORAGE_KEY, function (?array $simulations) use ($now, &$active, &$toLog) {
-            $simulations = $simulations ?? [];
-
-            foreach ($simulations as $id => $sim) {
-                if ($sim['status'] === 'ACTIVE') {
-                    // Check if simulation has expired
-                    $scheduledEnd = $sim['scheduledEndAt'] ?? null;
-                    if ($scheduledEnd && $scheduledEnd < $now) {
-                        // Mark as completed atomically
-                        $simulations[$id]['status'] = 'COMPLETED';
-                        $simulations[$id]['stoppedAt'] = $now;
-                        $toLog[] = $sim;
-                    } else {
-                        $active[] = $sim;
-                    }
+        foreach ($simulations as $id => $sim) {
+            if ($sim['status'] === 'ACTIVE') {
+                // Check if simulation has expired
+                $scheduledEnd = $sim['scheduledEndAt'] ?? null;
+                if ($scheduledEnd && $scheduledEnd < $now) {
+                    // Mark as completed
+                    $simulations[$id]['status'] = 'COMPLETED';
+                    $simulations[$id]['stoppedAt'] = $now;
+                    $toLog[] = $sim;
+                    $modified = true;
+                } else {
+                    $active[] = $sim;
                 }
             }
+        }
 
-            return $simulations;
-        }, []);
+        // Save changes
+        if ($modified) {
+            SharedStorage::set(self::STORAGE_KEY, $simulations);
+        }
 
-        // Log completion messages (outside atomic block to avoid nested locks)
+        // Log completion messages
         foreach ($toLog as $sim) {
             $duration = $sim['parameters']['durationSeconds'] ?? null;
             $message = match($sim['type']) {

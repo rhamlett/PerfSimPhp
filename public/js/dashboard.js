@@ -371,8 +371,20 @@ function escapeHtml(str) {
  *   Shape: { cpu: { active, ... }, memory: { active, ... }, ... }
  */
 function updateActiveSimulations(simulations) {
-  // Only update DOM if simulations have changed (prevents blinking)
-  const newJson = JSON.stringify(simulations);
+  // Build simplified state for comparison (only fields that affect display)
+  const displayState = {
+    cpuActive: !!simulations.cpu?.active,
+    cpuLoad: simulations.cpu?.targetLoad || 0,
+    memActive: !!simulations.memory?.active,
+    memMb: Math.round(simulations.memory?.allocatedMb || 0),
+    blockingActive: !!simulations.blocking?.active,
+    blockingDuration: simulations.blocking?.duration || 0,
+    slowActive: !!simulations.slowRequests?.active,
+    slowCount: simulations.slowRequests?.activeCount || 0,
+  };
+  
+  // Only update DOM if display-relevant state has changed (prevents blinking)
+  const newJson = JSON.stringify(displayState);
   if (newJson === lastSimulationsJson) {
     return; // No change, skip re-render
   }
