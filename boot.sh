@@ -55,7 +55,18 @@ grep -n "root" $NGINX_BASE/nginx.conf
 
 # 5. Reload and Start
 echo "--- Reloading Nginx ---"
-nginx -t && service nginx reload
+# Kill any existing Nginx processes to ensure clean slate
+pkill nginx
+# Wait a moment
+sleep 2
+# Test config
+nginx -t
+# Start Nginx service (or reload if it survived)
+service nginx start || service nginx reload
+
+echo "--- Internal Connectivity Check ---"
+curl -I http://localhost:8080 || echo "Curl to 8080 failed"
+curl -I http://localhost:80 || echo "Curl to 80 failed"
 
 echo "--- Starting PHP-FPM ---"
 php-fpm -F

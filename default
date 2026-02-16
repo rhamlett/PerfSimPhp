@@ -12,6 +12,8 @@
 server {
     #proxy_cache cache;
     #proxy_cache_valid 200 1s;
+    listen 80;
+    listen [::]:80;
     listen 8080;
     listen [::]:8080;
     root /home/site/wwwroot/public;
