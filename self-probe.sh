@@ -19,20 +19,8 @@
 #
 # ENVIRONMENT:
 #   WEBSITE_HOSTNAME — Set by Azure App Service (e.g., myapp.azurewebsites.net)
-#   SELF_PROBE_INTERVAL — Seconds between probes (default: 5)
-#   SELF_PROBE_ENABLED — Set to "false" to disable (default: true)
 #
 # =============================================================================
-
-# Configuration
-PROBE_INTERVAL="${SELF_PROBE_INTERVAL:-5}"
-PROBE_ENABLED="${SELF_PROBE_ENABLED:-true}"
-
-# Check if probing is disabled
-if [ "$PROBE_ENABLED" = "false" ]; then
-    echo "[self-probe] Disabled via SELF_PROBE_ENABLED=false"
-    exit 0
-fi
 
 # Get the public hostname from Azure environment
 HOSTNAME="${WEBSITE_HOSTNAME:-}"
@@ -47,7 +35,6 @@ PROBE_URL="https://${HOSTNAME}/api/health"
 
 echo "[self-probe] Starting external health probe"
 echo "[self-probe] URL: $PROBE_URL"
-echo "[self-probe] Interval: ${PROBE_INTERVAL}s"
 
 # Counter for logging
 PROBE_COUNT=0
@@ -60,7 +47,7 @@ while true; do
     # Make the request (suppress output, capture status)
     HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$PROBE_URL" 2>/dev/null)
     
-    # Log every 60 probes (5 minutes at 5s interval) or on error
+    # Log every 60 probes (1 minute) or on error
     if [ $((PROBE_COUNT % 60)) -eq 0 ] || [ "$HTTP_STATUS" != "200" ]; then
         TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
         if [ "$HTTP_STATUS" = "200" ]; then
@@ -70,6 +57,6 @@ while true; do
         fi
     fi
     
-    # Wait before next probe
-    sleep "$PROBE_INTERVAL"
+    # Wait 1 second before next probe
+    sleep 1
 done
