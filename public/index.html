@@ -298,10 +298,10 @@
                Node.js: setTimeout (timer), libuv (thread pool), worker (worker_threads)
                PHP: sleep (PHP sleep()), cpu_intensive (hash_pbkdf2), file_io (file read/write)
                Go: time.Sleep, goroutine saturation, etc. -->
-          <h3>🐌 Slow Requests <span class="info-icon" title="Simulates slow responses with different blocking patterns specific to PHP">ℹ️</span></h3>
-          <p class="control-description">Simulates slow HTTP responses using PHP-specific blocking patterns. Choose a pattern to observe different resource contention behaviors.</p>
+          <h3>🐌 FPM Worker Exhaustion <span class="info-icon" title="Exhausts PHP-FPM worker pool with slow requests to cause request queuing">ℹ️</span></h3>
+          <p class="control-description">Exhausts the PHP-FPM worker pool by sending slow requests. When all workers are busy, new requests queue up, causing latency spikes.</p>
           <div class="slow-note">
-            ⚠️ Note: Requests exceeding 30 seconds total time (queue + execution) are flagged as critical
+            ⚠️ Use <strong>Burst Mode</strong> to send all requests at once and quickly exhaust the FPM worker pool.
           </div>
           <form id="slow-form">
             <label>
@@ -320,11 +320,15 @@
             </label>
             <label>
               Interval (s):
-              <input type="number" name="intervalSeconds" id="slow-interval" value="5" min="1" max="60">
+              <input type="number" name="intervalSeconds" id="slow-interval" value="1" min="0" max="60">
             </label>
             <label>
               Max Requests:
-              <input type="number" name="maxRequests" id="slow-max" value="3" min="1" max="100">
+              <input type="number" name="maxRequests" id="slow-max" value="60" min="1" max="200">
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="slow-burst" name="burstMode">
+              Burst Mode — Send all requests immediately (exhaust pool instantly)
             </label>
             <div class="btn-group">
               <button type="submit" class="btn-trigger btn-slow">🐌 Start Slow Requests</button>

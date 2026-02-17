@@ -598,11 +598,12 @@ async function blockRequestThread(durationSeconds) {
  *   - "file_io": Intensive file read/write — stresses filesystem I/O
  *
  * @param {number} delaySeconds - Delay per request (1-120)
- * @param {number} intervalSeconds - Interval between requests (1-30)
- * @param {number} maxRequests - Maximum requests (1-100)
+ * @param {number} intervalSeconds - Interval between requests (0 = burst mode)
+ * @param {number} maxRequests - Maximum requests (1-200)
  * @param {string} blockingPattern - One of: sleep, cpu_intensive, file_io
+ * @param {boolean} burstMode - If true, send all requests immediately
  */
-async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blockingPattern) {
+async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blockingPattern, burstMode = false) {
   // Stop any existing slow request simulation
   if (slowRequestState.intervalId) {
     stopSlowRequests();
@@ -618,32 +619,17 @@ async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blo
     sent: 0,
   };
 
+  const modeDesc = burstMode ? 'BURST' : `every ${intervalSeconds}s`;
   addEventToLog({ 
     level: 'info', 
-    message: `Starting slow request simulation: ${maxRequests} requests, ${delaySeconds}s each, every ${intervalSeconds}s (${blockingPattern})` 
+    message: `Starting FPM exhaustion: ${maxRequests} requests × ${delaySeconds}s (${blockingPattern}, ${modeDesc})` 
   });
   updateSlowStatus();
 
   // Function to send a single slow request (fire and forget)
-  const sendSlowRequest = () => {
-    if (slowRequestState.stopped || slowRequestState.sent >= slowRequestState.maxRequests) {
-      // Stop interval when max reached
-      if (slowRequestState.intervalId) {
-        clearInterval(slowRequestState.intervalId);
-        slowRequestState.intervalId = null;
-      }
-      return;
-    }
-
-    slowRequestState.sent++;
+  const sendSlowRequest = (requestNum) => {
     slowRequestState.inFlight++;
-    const requestNum = slowRequestState.sent;
     updateSlowStatus();
-
-    addEventToLog({ 
-      level: 'info', 
-      message: `Slow request #${requestNum} started (${blockingPattern}, ${delaySeconds}s)` 
-    });
 
     fetch('/api/simulations/slow/start', {
       method: 'POST',
@@ -677,12 +663,49 @@ async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blo
       });
   };
 
+  // BURST MODE: Send all requests immediately
+  if (burstMode) {
+    addEventToLog({ 
+      level: 'warning', 
+      message: `🔥 BURST: Sending ${maxRequests} requests simultaneously to exhaust FPM pool` 
+    });
+    for (let i = 1; i <= maxRequests; i++) {
+      slowRequestState.sent++;
+      sendSlowRequest(i);
+    }
+    return;
+  }
+
+  // INTERVAL MODE: Send requests at intervals
+  const sendNextRequest = () => {
+    if (slowRequestState.stopped || slowRequestState.sent >= slowRequestState.maxRequests) {
+      if (slowRequestState.intervalId) {
+        clearInterval(slowRequestState.intervalId);
+        slowRequestState.intervalId = null;
+      }
+      return;
+    }
+
+    slowRequestState.sent++;
+    const requestNum = slowRequestState.sent;
+    addEventToLog({ 
+      level: 'info', 
+      message: `Slow request #${requestNum} started (${blockingPattern}, ${delaySeconds}s)` 
+    });
+    sendSlowRequest(requestNum);
+  };
+
   // Send first request immediately
-  sendSlowRequest();
+  sendNextRequest();
 
   // Schedule remaining requests at intervals
-  if (maxRequests > 1) {
-    slowRequestState.intervalId = setInterval(sendSlowRequest, intervalSeconds * 1000);
+  if (maxRequests > 1 && intervalSeconds > 0) {
+    slowRequestState.intervalId = setInterval(sendNextRequest, intervalSeconds * 1000);
+  } else if (maxRequests > 1 && intervalSeconds === 0) {
+    // Interval of 0 = send all remaining immediately (same as burst)
+    for (let i = 2; i <= maxRequests; i++) {
+      sendNextRequest();
+    }
   }
 }
 
@@ -1022,10 +1045,11 @@ document.addEventListener('DOMContentLoaded', () => {
     slowForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const delay = parseInt(document.getElementById('slow-delay')?.value || '10', 10);
-      const interval = parseInt(document.getElementById('slow-interval')?.value || '5', 10);
-      const maxReqs = parseInt(document.getElementById('slow-max')?.value || '10', 10);
+      const interval = parseInt(document.getElementById('slow-interval')?.value || '1', 10);
+      const maxReqs = parseInt(document.getElementById('slow-max')?.value || '60', 10);
       const pattern = document.getElementById('slow-pattern')?.value || 'sleep';
-      startSlowRequests(delay, interval, maxReqs, pattern);
+      const burstMode = document.getElementById('slow-burst')?.checked || false;
+      startSlowRequests(delay, interval, maxReqs, pattern, burstMode);
     });
   }
 
