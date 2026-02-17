@@ -320,15 +320,29 @@ function pollEventsOnce() {
  * bypass Azure's stamp frontend and don't appear in AppLens metrics.
  */
 function startProbePolling() {
-  if (probePollTimer) clearInterval(probePollTimer);
+  if (probePollTimer) clearTimeout(probePollTimer);
 
-  probePollTimer = setInterval(probeOnce, PROBE_POLL_INTERVAL);
+  // Use setTimeout instead of setInterval to prevent overlapping requests
+  // The internal probes endpoint takes ~500ms, so we wait for completion before scheduling next
+  scheduleNextProbe();
+}
+
+/**
+ * Schedules the next probe after a delay.
+ * Uses setTimeout to prevent overlapping requests when server is slow.
+ */
+function scheduleNextProbe() {
+  probePollTimer = setTimeout(() => {
+    probeOnce();
+  }, PROBE_POLL_INTERVAL);
 }
 
 /**
  * Fetches a batch of internal latency probes from the server.
  * The server does multiple curl requests to localhost:8080/api/metrics/probe,
  * avoiding the stamp frontend while still measuring real PHP-FPM latency.
+ * 
+ * After completion (success or failure), schedules the next probe.
  */
 function probeOnce() {
   // Use internal batch probing (reduces AppLens traffic)
@@ -378,6 +392,10 @@ function probeOnce() {
           loadTestConcurrent: 0,
         });
       }
+    })
+    .finally(() => {
+      // Schedule next probe after this one completes (prevents overlapping requests)
+      scheduleNextProbe();
     });
 }
 
@@ -391,7 +409,7 @@ function probeOnce() {
 function stopAllPolling() {
   if (metricsPollTimer) { clearInterval(metricsPollTimer); metricsPollTimer = null; }
   if (eventsPollTimer) { clearInterval(eventsPollTimer); eventsPollTimer = null; }
-  if (probePollTimer) { clearInterval(probePollTimer); probePollTimer = null; }
+  if (probePollTimer) { clearTimeout(probePollTimer); probePollTimer = null; }
 }
 
 /**
