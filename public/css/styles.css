@@ -1118,7 +1118,7 @@ section h2, section h3 {
   background: rgba(135, 100, 184, 0.05);
 }
 
-.slow-section {
+.session-section {
   border: 2px dashed #ff8c00;
   background: rgba(255, 140, 0, 0.05);
 }
@@ -1128,7 +1128,7 @@ section h2, section h3 {
   background: rgba(209, 52, 56, 0.05);
 }
 
-.slow-note {
+.session-note {
   font-size: 0.75rem;
   color: #b8860b;
   background: rgba(255, 193, 7, 0.15);
@@ -1138,17 +1138,7 @@ section h2, section h3 {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
-.pattern-description {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: var(--radius-sm);
-  line-height: 1.4;
-}
-
-.slow-status {
+.session-status {
   display: none;
   font-size: 0.8rem;
   color: var(--color-text-muted);
@@ -1158,11 +1148,24 @@ section h2, section h3 {
   border-radius: var(--radius-sm);
 }
 
-.slow-status.active {
+.session-status.active {
   display: block;
   color: #a85900;
   border: 2px solid #ff8c00;
   background: rgba(255, 255, 255, 0.95);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
 }
 
 /* Form Controls in Panel */

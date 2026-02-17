@@ -13,10 +13,9 @@
  *   3. Request Thread Blocking — Blocks PHP-FPM workers with CPU-intensive ops
  *      (In Node.js: "Event Loop Blocking". PHP has no event loop, so blocking
  *       a PHP-FPM worker thread is the equivalent simulation.)
- *   4. Slow Requests — Creates requests that take a long time to complete
- *      Patterns: sleep (PHP sleep()), cpu_intensive (hash_pbkdf2),
- *                file_io (intensive file read/write)
- *      (In Node.js: setTimeout, libuv, worker)
+ *   4. Session Lock Contention — Demonstrates PHP's session file locking gotcha
+ *      When one request holds session_start(), other requests using sessions
+ *      from the same browser will block waiting for the lock.
  *   5. Crash Simulator — Triggers various crash types for recovery testing
  *      Types: failfast (exit(1)), stackoverflow (infinite recursion),
  *             exception (trigger_error), oom (memory exhaustion)
@@ -52,19 +51,12 @@ const MAX_EVENT_LOG_ENTRIES = 100;
 let activeSimulations = {};
 let lastSimulationsJson = ''; // Track last state to avoid unnecessary re-renders
 
-// Slow request state
-let slowRequestState = {
-  intervalId: null,
-  inFlight: 0,
-  completed: 0,
-  stopped: false,
-  maxRequests: 0,
-  sent: 0,
-  pending: [], // Queue for pending requests (concurrency limiting)
+// Session lock state
+let sessionLockState = {
+  active: false,
+  startTime: null,
+  duration: 0,
 };
-
-// Max concurrent browser connections for slow requests (leave headroom for probes)
-const MAX_CONCURRENT_SLOW_REQUESTS = 4;
 
 /**
  * Initializes the polling client callbacks.
@@ -400,8 +392,6 @@ function updateActiveSimulations(simulations) {
     memMb: Math.round(simulations.memory?.allocatedMb || 0),
     blockingActive: !!simulations.blocking?.active,
     blockingDuration: simulations.blocking?.duration || 0,
-    slowActive: !!simulations.slowRequests?.active,
-    slowCount: simulations.slowRequests?.activeCount || 0,
   };
   
   // Only update DOM if display-relevant state has changed (prevents blinking)
@@ -441,15 +431,6 @@ function updateActiveSimulations(simulations) {
       label: 'Thread Blocking',
       detail: `${simulations.blocking.duration || 0}s`,
       icon: '🔒',
-    });
-  }
-
-  if (simulations.slowRequests?.active) {
-    activeSims.push({
-      type: 'slow',
-      label: 'Slow Requests',
-      detail: `${simulations.slowRequests.activeCount || 0} active`,
-      icon: '🐌',
     });
   }
 
@@ -592,205 +573,80 @@ async function blockRequestThread(durationSeconds) {
 }
 
 /**
- * Starts slow request simulation.
- * Creates requests that take a long time to complete via different blocking patterns.
- * Sends multiple requests at intervals to exhaust FPM workers and cause latency degradation.
- * 
- * Uses concurrency limiting to avoid exhausting browser connections (leaves headroom for probes).
+ * Holds the PHP session lock for the specified duration.
+ * While held, any request from this browser that uses sessions will block.
+ * This demonstrates PHP's session file locking gotcha.
  *
- * PHP slow request patterns:
- *   - "sleep": Uses PHP sleep() — simple delay, doesn't consume CPU
- *   - "cpu_intensive": Uses hash_pbkdf2() loops — consumes CPU while delayed
- *   - "file_io": Intensive file read/write — stresses filesystem I/O
- *
- * @param {number} delaySeconds - Delay per request (1-120)
- * @param {number} intervalSeconds - Interval between requests (0 = burst mode)
- * @param {number} maxRequests - Maximum requests (1-200)
- * @param {string} blockingPattern - One of: sleep, cpu_intensive, file_io
- * @param {boolean} burstMode - If true, send all requests immediately
+ * @param {number} durationSeconds - How long to hold the lock (1-60)
  */
-async function startSlowRequests(delaySeconds, intervalSeconds, maxRequests, blockingPattern, burstMode = false) {
-  // Stop any existing slow request simulation
-  if (slowRequestState.intervalId) {
-    stopSlowRequests();
-  }
-
-  // Reset state
-  slowRequestState = {
-    intervalId: null,
-    inFlight: 0,
-    completed: 0,
-    stopped: false,
-    maxRequests: maxRequests,
-    sent: 0,
-    pending: [],
+async function holdSessionLock(durationSeconds) {
+  // Update state
+  sessionLockState = {
+    active: true,
+    startTime: Date.now(),
+    duration: durationSeconds,
   };
-
-  const modeDesc = burstMode ? 'BURST' : `every ${intervalSeconds}s`;
+  
+  updateSessionStatus();
+  
   addEventToLog({ 
-    level: 'info', 
-    message: `Starting FPM exhaustion: ${maxRequests} requests × ${delaySeconds}s (${blockingPattern}, ${modeDesc})` 
+    level: 'warning', 
+    message: `🔒 Holding session lock for ${durationSeconds}s — session probes will block` 
   });
-  updateSlowStatus();
 
-  // Process next request from queue (concurrency limiter)
-  const processQueue = () => {
-    while (slowRequestState.pending.length > 0 && 
-           slowRequestState.inFlight < MAX_CONCURRENT_SLOW_REQUESTS &&
-           !slowRequestState.stopped) {
-      const requestNum = slowRequestState.pending.shift();
-      executeSlowRequest(requestNum, delaySeconds, blockingPattern, processQueue);
-    }
-  };
-
-  // Function to actually execute a slow request
-  const executeSlowRequest = (requestNum, delay, pattern, onComplete) => {
-    slowRequestState.inFlight++;
-    updateSlowStatus();
-
-    fetch('/api/simulations/slow/start', {
+  try {
+    const response = await fetch('/api/simulations/session/lock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delaySeconds: delay, blockingPattern: pattern }),
-    })
-      .then(response => response.json())
-      .then(data => {
-        slowRequestState.inFlight--;
-        slowRequestState.completed++;
-        updateSlowStatus();
-        if (!slowRequestState.stopped) {
-          addEventToLog({ 
-            level: 'success', 
-            message: `Slow request #${requestNum} completed` 
-          });
-        }
-        // Check if all done
-        if (slowRequestState.completed >= slowRequestState.maxRequests && !slowRequestState.stopped) {
-          addEventToLog({ level: 'success', message: `All ${slowRequestState.maxRequests} slow requests completed` });
-          updateSlowStatus();
-        }
-        // Process next from queue
-        onComplete();
-      })
-      .catch(err => {
-        slowRequestState.inFlight--;
-        updateSlowStatus();
-        addEventToLog({ 
-          level: 'error', 
-          message: `Slow request #${requestNum} failed: ${err.message}` 
-        });
-        // Process next from queue even on error
-        onComplete();
+      body: JSON.stringify({ durationSeconds }),
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      addEventToLog({ 
+        level: 'success', 
+        message: `🔓 Session lock released after ${data.actualDuration}s` 
       });
-  };
-
-  // BURST MODE: Queue all requests immediately
-  if (burstMode) {
+    } else {
+      addEventToLog({ 
+        level: 'error', 
+        message: `Session lock failed: ${data.error || 'Unknown error'}` 
+      });
+    }
+  } catch (err) {
     addEventToLog({ 
-      level: 'warning', 
-      message: `🔥 BURST: Queuing ${maxRequests} requests (${MAX_CONCURRENT_SLOW_REQUESTS} concurrent to preserve probe connectivity)` 
+      level: 'error', 
+      message: `Session lock request failed: ${err.message}` 
     });
-    for (let i = 1; i <= maxRequests; i++) {
-      slowRequestState.sent++;
-      slowRequestState.pending.push(i);
-    }
-    processQueue();
-    return;
-  }
-
-  // INTERVAL MODE: Send requests at intervals
-  const sendNextRequest = () => {
-    if (slowRequestState.stopped || slowRequestState.sent >= slowRequestState.maxRequests) {
-      if (slowRequestState.intervalId) {
-        clearInterval(slowRequestState.intervalId);
-        slowRequestState.intervalId = null;
-      }
-      return;
-    }
-
-    slowRequestState.sent++;
-    const requestNum = slowRequestState.sent;
-    addEventToLog({ 
-      level: 'info', 
-      message: `Slow request #${requestNum} started (${blockingPattern}, ${delaySeconds}s)` 
-    });
-    slowRequestState.pending.push(requestNum);
-    processQueue();
-  };
-
-  // Send first request immediately
-  sendNextRequest();
-
-  // Schedule remaining requests at intervals
-  if (maxRequests > 1 && intervalSeconds > 0) {
-    slowRequestState.intervalId = setInterval(sendNextRequest, intervalSeconds * 1000);
-  } else if (maxRequests > 1 && intervalSeconds === 0) {
-    // Interval of 0 = queue all remaining immediately (same as burst)
-    for (let i = 2; i <= maxRequests; i++) {
-      sendNextRequest();
-    }
+  } finally {
+    sessionLockState.active = false;
+    updateSessionStatus();
   }
 }
 
 /**
- * Updates the slow request status display.
+ * Updates the session lock status display.
  */
-function updateSlowStatus() {
-  const statusEl = document.getElementById('slow-status');
+function updateSessionStatus() {
+  const statusEl = document.getElementById('session-status');
   if (statusEl) {
-    const state = slowRequestState;
-    const queued = state.pending?.length || 0;
-    const isActive = state.inFlight > 0 || queued > 0 || (state.intervalId && state.sent < state.maxRequests);
-    
-    if (isActive) {
+    if (sessionLockState.active) {
       statusEl.classList.add('active');
-      let statusText = `<strong>In Progress:</strong> ${state.inFlight} in-flight`;
-      if (queued > 0) {
-        statusText += `, ${queued} queued`;
-      }
-      statusText += `, ${state.completed}/${state.maxRequests} completed`;
-      statusEl.innerHTML = statusText;
-    } else if (state.completed > 0) {
-      statusEl.classList.add('active');
-      statusEl.innerHTML = `<strong>Done:</strong> ${state.completed}/${state.maxRequests} completed`;
-      // Hide after 5 seconds
-      setTimeout(() => {
-        if (statusEl.innerHTML.includes('Done:')) {
-          statusEl.classList.remove('active');
-        }
-      }, 5000);
+      const elapsed = Math.round((Date.now() - sessionLockState.startTime) / 1000);
+      statusEl.innerHTML = `<strong>🔒 Lock Active:</strong> ${elapsed}s / ${sessionLockState.duration}s — Session probes are blocking`;
     } else {
       statusEl.classList.remove('active');
     }
   }
 }
 
-/**
- * Stops slow request simulation.
- */
-async function stopSlowRequests() {
-  if (slowRequestState.intervalId) {
-    clearInterval(slowRequestState.intervalId);
-    slowRequestState.intervalId = null;
+// Update session status periodically while lock is active
+setInterval(() => {
+  if (sessionLockState.active) {
+    updateSessionStatus();
   }
-  slowRequestState.stopped = true;
-  
-  const queuedCount = slowRequestState.pending?.length || 0;
-  slowRequestState.pending = []; // Clear the queue
-
-  const inFlight = slowRequestState.inFlight;
-  let msg = `Slow request simulation stopped (${slowRequestState.completed} completed`;
-  if (queuedCount > 0) {
-    msg += `, ${queuedCount} cancelled`;
-  }
-  if (inFlight > 0) {
-    msg += `, ${inFlight} in-flight will complete`;
-  }
-  msg += ')';
-  
-  addEventToLog({ level: 'warning', message: msg });
-  updateSlowStatus();
-}
+}, 500);
 
 /**
  * Triggers a crash of the specified type.
@@ -853,33 +709,6 @@ async function triggerCrash(crashType) {
     // Expected — the crash may kill the connection
     addEventToLog({ level: 'warning', message: `Crash request completed (connection may have been lost)` });
   }
-}
-
-// =========================================================================
-// SLOW REQUEST PATTERN DESCRIPTIONS
-// =========================================================================
-
-/**
- * Returns a human-readable description of a slow request pattern.
- * Used in the UI to help users understand what each pattern does.
- *
- * @param {string} pattern - One of: sleep, cpu_intensive, file_io
- * @returns {string} Description of the pattern
- */
-function getPatternDescription(pattern) {
-  const descriptions = {
-    sleep: '<strong>Sleep</strong> — Uses PHP sleep() to pause execution. ' +
-      'The FPM worker is idle but occupied. Does not consume CPU. ' +
-      'Other requests can still be served by other FPM workers.',
-    cpu_intensive: '<strong>CPU Intensive</strong> — Uses hash_pbkdf2() loops to create ' +
-      'a CPU-bound delay. The FPM worker is actively consuming CPU. ' +
-      'Simulates computationally expensive operations like image processing.',
-    file_io: '<strong>File I/O</strong> — Performs intensive file read/write operations ' +
-      'to create an I/O-bound delay. Stresses the filesystem and blocks the ' +
-      'FPM worker on disk operations. Simulates log processing or data import.',
-  };
-
-  return descriptions[pattern] || 'Unknown pattern';
 }
 
 // =========================================================================
@@ -1079,39 +908,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Slow Requests Form ----
-  const slowForm = document.getElementById('slow-form');
-  if (slowForm) {
-    slowForm.addEventListener('submit', (e) => {
+  // ---- Session Lock Form ----
+  const sessionForm = document.getElementById('session-form');
+  if (sessionForm) {
+    sessionForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const delay = parseInt(document.getElementById('slow-delay')?.value || '10', 10);
-      const interval = parseInt(document.getElementById('slow-interval')?.value || '1', 10);
-      const maxReqs = parseInt(document.getElementById('slow-max')?.value || '60', 10);
-      const pattern = document.getElementById('slow-pattern')?.value || 'sleep';
-      const burstMode = document.getElementById('slow-burst')?.checked || false;
-      startSlowRequests(delay, interval, maxReqs, pattern, burstMode);
+      const duration = parseInt(document.getElementById('session-duration')?.value || '10', 10);
+      holdSessionLock(duration);
     });
   }
 
-  const stopSlowBtn = document.getElementById('stop-slow');
-  if (stopSlowBtn) {
-    stopSlowBtn.addEventListener('click', stopSlowRequests);
-  }
-
-  // Pattern description update
-  const patternSelect = document.getElementById('slow-pattern');
-  if (patternSelect) {
-    patternSelect.addEventListener('change', (e) => {
-      const descEl = document.getElementById('pattern-description');
-      if (descEl) {
-        descEl.innerHTML = getPatternDescription(e.target.value);
+  // Session probe checkbox — toggles whether probes use sessions
+  const sessionProbeCheckbox = document.getElementById('session-probe-enabled');
+  if (sessionProbeCheckbox) {
+    // Initialize from checkbox state
+    if (typeof window.setSessionProbeEnabled === 'function') {
+      window.setSessionProbeEnabled(sessionProbeCheckbox.checked);
+    }
+    
+    sessionProbeCheckbox.addEventListener('change', (e) => {
+      if (typeof window.setSessionProbeEnabled === 'function') {
+        window.setSessionProbeEnabled(e.target.checked);
+        addEventToLog({ 
+          level: 'info', 
+          message: e.target.checked 
+            ? 'Session probes enabled — probes will block if session lock is held'
+            : 'Session probes disabled — probes bypass session locking'
+        });
       }
     });
-    // Initialize description
-    const descEl = document.getElementById('pattern-description');
-    if (descEl) {
-      descEl.innerHTML = getPatternDescription(patternSelect.value);
-    }
   }
 
   // ---- Crash Form ----

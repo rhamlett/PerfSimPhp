@@ -292,50 +292,29 @@
           <div id="eventloop-impact" class="eventloop-impact"></div>
         </div>
 
-        <!-- Slow Requests -->
-        <div class="control-section slow-section">
-          <!-- PORTING NOTE: Update slow request patterns for the target runtime's I/O model.
-               Node.js: setTimeout (timer), libuv (thread pool), worker (worker_threads)
-               PHP: sleep (PHP sleep()), cpu_intensive (hash_pbkdf2), file_io (file read/write)
-               Go: time.Sleep, goroutine saturation, etc. -->
-          <h3>🐌 FPM Worker Exhaustion <span class="info-icon" title="Exhausts PHP-FPM worker pool with slow requests to cause request queuing">ℹ️</span></h3>
-          <p class="control-description">Exhausts the PHP-FPM worker pool by sending slow requests. When all workers are busy, new requests queue up, causing latency spikes.</p>
-          <div class="slow-note">
-            ⚠️ Use <strong>Burst Mode</strong> to send all requests at once and quickly exhaust the FPM worker pool.
+        <!-- Session Lock Contention -->
+        <div class="control-section session-section">
+          <!-- PORTING NOTE: PHP-specific gotcha. Node.js has no equivalent since it doesn't use
+               file-based sessions. Other runtimes may have similar issues with session stores. -->
+          <h3>🔒 Session Lock Contention <span class="info-icon" title="Demonstrates PHP's session file locking gotcha">ℹ️</span></h3>
+          <p class="control-description">PHP's default sessions use exclusive file locks. While held, ALL requests from this browser that use sessions will block.</p>
+          <div class="session-note">
+            ⚠️ This affects only requests from YOUR browser (same session). Watch the latency chart spike when probing with sessions enabled.
           </div>
-          <form id="slow-form">
+          <form id="session-form">
             <label>
-              Blocking Pattern:
-              <select name="blockingPattern" id="slow-pattern" class="blocking-pattern-select">
-                <!-- PORTING NOTE: Update options to match target runtime patterns -->
-                <option value="sleep">sleep() — Non-blocking delay</option>
-                <option value="cpu_intensive">CPU Intensive (hash_pbkdf2)</option>
-                <option value="file_io">File I/O Saturation</option>
-              </select>
-            </label>
-            <div id="pattern-description" class="pattern-description"></div>
-            <label>
-              Request Execution Time (s) <span class="info-icon" title="Time for each request">ⓘ</span>:
-              <input type="number" name="delaySeconds" id="slow-delay" value="10" min="1" max="300">
-            </label>
-            <label>
-              Interval (s):
-              <input type="number" name="intervalSeconds" id="slow-interval" value="1" min="0" max="60">
-            </label>
-            <label>
-              Max Requests:
-              <input type="number" name="maxRequests" id="slow-max" value="60" min="1" max="200">
+              Lock Duration (s):
+              <input type="number" name="durationSeconds" id="session-duration" value="10" min="1" max="60">
             </label>
             <label class="checkbox-label">
-              <input type="checkbox" id="slow-burst" name="burstMode">
-              Burst Mode — Send all requests immediately (exhaust pool instantly)
+              <input type="checkbox" id="session-probe-enabled" checked>
+              Enable session probes (probes will block while lock is held)
             </label>
             <div class="btn-group">
-              <button type="submit" class="btn-trigger btn-slow">🐌 Start Slow Requests</button>
-              <button type="button" id="stop-slow" class="btn-stop">⬛ Stop</button>
+              <button type="submit" class="btn-trigger btn-session">🔒 Hold Session Lock</button>
             </div>
           </form>
-          <div id="slow-status" class="slow-status"></div>
+          <div id="session-status" class="session-status"></div>
         </div>
 
         <!-- Crash Simulation -->

@@ -44,7 +44,7 @@ use PerfSimPhp\Controllers\MetricsController;
 use PerfSimPhp\Controllers\CpuController;
 use PerfSimPhp\Controllers\MemoryController;
 use PerfSimPhp\Controllers\BlockingController;
-use PerfSimPhp\Controllers\SlowController;
+use PerfSimPhp\Controllers\SessionController;
 use PerfSimPhp\Controllers\CrashController;
 use PerfSimPhp\Controllers\LoadTestController;
 use PerfSimPhp\Controllers\AdminController;
@@ -155,17 +155,13 @@ class Router
             return null;
         }
 
-        // Slow request endpoint
-        if ($method === 'GET' && $path === '/api/simulations/slow') {
-            SlowController::slow();
+        // Session lock contention endpoint (PHP-specific gotcha)
+        if ($method === 'POST' && ($path === '/api/simulations/session/lock' || $path === '/api/simulations/session/start')) {
+            SessionController::lock();
             return null;
         }
-        if ($method === 'POST' && ($path === '/api/simulations/slow' || $path === '/api/simulations/slow/start')) {
-            SlowController::start();
-            return null;
-        }
-        if ($method === 'POST' && $path === '/api/simulations/slow/stop') {
-            SlowController::stop();
+        if ($method === 'GET' && $path === '/api/simulations/session/probe') {
+            SessionController::probe();
             return null;
         }
 

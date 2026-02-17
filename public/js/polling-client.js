@@ -40,6 +40,14 @@ const METRICS_POLL_INTERVAL = 250;
 const EVENTS_POLL_INTERVAL = 2000;
 const PROBE_POLL_INTERVAL = 100;
 
+// Session probe mode - when enabled, probes use session endpoint (blocks if session locked)
+let sessionProbeEnabled = false;
+
+// Export function to enable/disable session probes
+window.setSessionProbeEnabled = function(enabled) {
+  sessionProbeEnabled = enabled;
+};
+
 // Polling timer IDs
 let metricsPollTimer = null;
 let eventsPollTimer = null;
@@ -317,13 +325,18 @@ function startProbePolling() {
 
 /**
  * Sends a single latency probe using XMLHttpRequest for timing accuracy.
+ * When sessionProbeEnabled is true, uses session endpoint to demonstrate lock contention.
  */
 function probeOnce() {
   const startTime = performance.now();
 
   const xhr = new XMLHttpRequest();
-  xhr.open('GET', '/api/metrics/probe?t=' + Date.now(), true);
-  xhr.timeout = 5000; // 5 second timeout
+  // Use session probe endpoint when testing session lock contention
+  const probeUrl = sessionProbeEnabled 
+    ? '/api/simulations/session/probe?t=' + Date.now()
+    : '/api/metrics/probe?t=' + Date.now();
+  xhr.open('GET', probeUrl, true);
+  xhr.timeout = 30000; // 30 second timeout (session locks can be long)
 
   xhr.onload = function () {
     const endTime = performance.now();
