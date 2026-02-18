@@ -178,14 +178,15 @@ src/
 │   ├── RequestLogger.php   # Request logging
 │   └── Validation.php      # Input validation
 ├── Services/
-│   ├── CpuStressService.php
-│   ├── MemoryPressureService.php
-│   ├── BlockingService.php
-│   ├── SlowRequestService.php
-│   ├── CrashService.php
-│   ├── LoadTestService.php
-│   ├── MetricsService.php
-│   ├── EventLogService.php
+│   ├── CpuStressService.php      # Background CPU workers via exec()
+│   ├── MemoryPressureService.php # Shared storage memory allocation
+│   ├── BlockingService.php       # FPM worker pool blocking
+│   ├── SlowRequestService.php    # Delayed response patterns
+│   ├── CrashService.php          # Worker crash triggers
+│   ├── CrashTrackingService.php  # Crash statistics tracking
+│   ├── LoadTestService.php       # Azure Load Testing endpoint
+│   ├── MetricsService.php        # System metrics collection
+│   ├── EventLogService.php       # Event ring buffer
 │   └── SimulationTrackerService.php
 └── Controllers/
     ├── HealthController.php
@@ -433,10 +434,11 @@ POST /api/simulations/slow/start
       <ul>
         <li>FPM worker process terminates immediately</li>
         <li>Response is sent before crash via <code>fastcgi_finish_request()</code></li>
-        <li>PHP-FPM master auto-restarts the worker</li>
-        <li>After restart: new Process ID, fresh worker state</li>
-        <li>Event Log shows: PID change detected</li>
+        <li>PHP-FPM master auto-restarts the worker automatically</li>
+        <li>Dashboard shows session crash counter incrementing</li>
+        <li>Event Log shows crash initiated messages</li>
         <li>Shared storage (APCu/files) persists across worker restarts</li>
+        <li>Use "Crash Multiple Workers" to send concurrent crash requests for more visible impact</li>
       </ul>
 
       <div class="info-box">
@@ -500,11 +502,12 @@ POST /api/simulations/slow/start
       
       <h3>Crash Endpoints</h3>
       <table>
-        <tr><th>Endpoint</th><th>Method</th><th>Crash Type</th></tr>
+        <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
         <tr><td><code>/api/simulations/crash/failfast</code></td><td>POST</td><td>FailFast &mdash; exit(1)</td></tr>
         <tr><td><code>/api/simulations/crash/stackoverflow</code></td><td>POST</td><td>Stack Overflow &mdash; Infinite Recursion</td></tr>
         <tr><td><code>/api/simulations/crash/exception</code></td><td>POST</td><td>Fatal Error &mdash; trigger_error()</td></tr>
         <tr><td><code>/api/simulations/crash/oom</code></td><td>POST</td><td>Memory Exhaustion &mdash; Exceed memory_limit</td></tr>
+        <tr><td><code>/api/simulations/crash/stats</code></td><td>GET</td><td>Get crash statistics and active worker counts</td></tr>
       </table>
       
       <h3>Admin</h3>
