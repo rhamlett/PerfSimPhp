@@ -175,11 +175,16 @@ class LoadTestService
      */
     public static function getCurrentStats(): array
     {
-        $stats = SharedStorage::get(self::STATS_KEY, [
+        $defaultStats = [
             'totalRequestsProcessed' => 0,
             'totalExceptionsThrown' => 0,
             'totalResponseTimeMs' => 0,
-        ]);
+        ];
+        
+        $stats = SharedStorage::get(self::STATS_KEY, $defaultStats);
+        
+        // Ensure all required keys exist (handles corrupted/partial storage data)
+        $stats = array_merge($defaultStats, is_array($stats) ? $stats : []);
 
         $concurrent = SharedStorage::get(self::CONCURRENT_KEY, 0);
 
