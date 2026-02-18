@@ -148,7 +148,6 @@
         <li><strong>Memory Pressure</strong> &mdash; Allocate and retain memory to simulate leaks</li>
         <!-- PORTING NOTE: Event Loop Blocking → Request Thread Blocking for PHP -->
         <li><strong>Request Thread Blocking</strong> &mdash; Block PHP-FPM workers with synchronous operations</li>
-        <li><strong>Slow Requests</strong> &mdash; Simulate slow HTTP responses with PHP-specific blocking patterns</li>
         <li><strong>Crash Simulation</strong> &mdash; Trigger fatal errors, exit, or OOM conditions</li>
       </ul>
 
@@ -181,7 +180,7 @@ src/
 │   ├── CpuStressService.php      # Background CPU workers via exec()
 │   ├── MemoryPressureService.php # Shared storage memory allocation
 │   ├── BlockingService.php       # FPM worker pool blocking
-│   ├── SlowRequestService.php    # Delayed response patterns
+
 │   ├── CrashService.php          # Worker crash triggers
 │   ├── CrashTrackingService.php  # Crash statistics tracking
 │   ├── LoadTestService.php       # Azure Load Testing endpoint
@@ -194,7 +193,6 @@ src/
     ├── CpuController.php
     ├── MemoryController.php
     ├── BlockingController.php
-    ├── SlowController.php
     ├── CrashController.php
     ├── LoadTestController.php
     └── AdminController.php
@@ -342,75 +340,6 @@ POST /api/simulations/memory/release</code></pre>
       </ul>
     </section>
 
-    <section id="slow-requests" class="docs-section">
-      <h2>Slow Request Simulation</h2>
-      <p>Simulates slow HTTP responses using PHP-specific blocking patterns to observe different resource contention behaviors.</p>
-
-      <h3>Blocking Patterns</h3>
-      <!-- PORTING NOTE: Update blocking patterns for target runtime's I/O model -->
-      <table>
-        <tr><th>Pattern</th><th>Description</th><th>Affected Resources</th></tr>
-        <tr><td><code>sleep</code></td><td>Non-blocking delay via <code>sleep()</code></td><td>FPM worker is idle but occupied</td></tr>
-        <tr><td><code>cpu_intensive</code></td><td>CPU-bound via <code>hash_pbkdf2()</code></td><td>CPU, FPM worker actively consuming</td></tr>
-        <tr><td><code>file_io</code></td><td>Intensive file read/write operations</td><td>Filesystem I/O, disk throughput</td></tr>
-      </table>
-
-      <div class="info-box">
-        <strong>🐘 PHP Insight:</strong> PHP's <code>sleep()</code> is blocking (occupies an FPM worker) but doesn't consume CPU. The <code>cpu_intensive</code> pattern actively consumes CPU while blocking. Both can starve the finite pool of FPM workers if enough concurrent requests are made.
-      </div>
-
-      <h3>Usage</h3>
-      <pre><code># Sleep pattern (occupies worker, no CPU)
-POST /api/simulations/slow/start
-{"delaySeconds": 10, "blockingPattern": "sleep"}
-
-# CPU-intensive (high CPU while delayed)
-POST /api/simulations/slow/start
-{"delaySeconds": 10, "blockingPattern": "cpu_intensive"}
-
-# File I/O saturation
-POST /api/simulations/slow/start
-{"delaySeconds": 10, "blockingPattern": "file_io"}</code></pre>
-
-      <h3>Expected Effects by Pattern</h3>
-      <h4>sleep (Worker Occupation)</h4>
-      <ul>
-        <li>Slow endpoint takes configured delay time</li>
-        <li>FPM worker is occupied but CPU stays low</li>
-        <li>Other requests work fine (other workers available)</li>
-        <li>Exhausting all workers causes request queuing</li>
-      </ul>
-
-      <h4>cpu_intensive (CPU-Bound)</h4>
-      <ul>
-        <li>CPU usage increases per slow request</li>
-        <li>FPM worker actively consuming CPU cycles</li>
-        <li>Other requests may see increased latency from CPU contention</li>
-      </ul>
-
-      <h4>file_io (I/O-Bound)</h4>
-      <ul>
-        <li>Disk I/O increases significantly</li>
-        <li>Other file operations on the system may slow down</li>
-        <li>Main request handling unaffected unless disk is saturated</li>
-      </ul>
-
-      <h3>Dashboard Controls</h3>
-      <ul>
-        <li><strong>Blocking Pattern:</strong> sleep, cpu_intensive, or file_io</li>
-        <li><strong>Delay:</strong> How long each request takes (1-300 seconds)</li>
-        <li><strong>Interval:</strong> Time between automated requests</li>
-        <li><strong>Max Requests:</strong> How many to send before stopping</li>
-      </ul>
-
-      <h3>Use Cases</h3>
-      <ul>
-        <li>Testing timeout configurations (PHP max_execution_time, Nginx proxy_read_timeout)</li>
-        <li>Simulating FPM worker pool exhaustion</li>
-        <li>Understanding PHP-FPM concurrency model</li>
-      </ul>
-    </section>
-
     <section id="crash-simulation" class="docs-section">
       <h2>Crash Simulation</h2>
       <!-- PORTING NOTE: Update crash description for target runtime -->
@@ -496,8 +425,6 @@ POST /api/simulations/slow/start
         <tr><td><code>/api/simulations/memory/allocate</code></td><td>POST</td><td>Allocate memory</td></tr>
         <tr><td><code>/api/simulations/memory/release</code></td><td>POST</td><td>Release all memory</td></tr>
         <tr><td><code>/api/simulations/blocking/start</code></td><td>POST</td><td>Block FPM worker thread</td></tr>
-        <tr><td><code>/api/simulations/slow/start</code></td><td>POST</td><td>Start slow requests</td></tr>
-        <tr><td><code>/api/simulations/slow/stop</code></td><td>POST</td><td>Stop slow requests</td></tr>
       </table>
       
       <h3>Crash Endpoints</h3>
@@ -600,7 +527,6 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workIterations=0&amp;bufferSiz
         <li><a href="#memory-pressure">📊 Memory Pressure</a></li>
         <!-- PORTING NOTE: Update section link for target runtime -->
         <li><a href="#request-thread-blocking">🧵 Request Thread Blocking</a></li>
-        <li><a href="#slow-requests">🐢 Slow Requests</a></li>
         <li><a href="#crash-simulation">💥 Crash Simulation</a></li>
       </ul>
       <div class="sidebar-section-label">REFERENCE</div>

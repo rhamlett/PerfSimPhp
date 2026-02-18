@@ -13,7 +13,6 @@ An educational tool designed to help Azure support engineers practice diagnosing
 | **CPU Stress** | Generate high CPU usage via background PHP processes | Target %, Duration |
 | **Memory Pressure** | Allocate and retain memory in shared storage (APCu) | Size in MB |
 | **Request Thread Blocking** | Block PHP-FPM workers with synchronous operations | Duration, # Workers |
-| **Slow Requests** | Simulate slow HTTP responses with various blocking patterns | Delay, Pattern |
 | **Crash Simulation** | Trigger fatal errors, exit, stack overflow, or OOM conditions | Crash Type |
 
 ## 🏗️ Architecture
@@ -126,21 +125,6 @@ POST /api/simulations/blocking/start
 ```
 
 **Key difference from CPU stress:** CPU stress uses background processes (FPM workers stay available). Request blocking runs inside FPM workers (those workers become unavailable).
-
-### Slow Requests
-
-Simulates slow HTTP responses with various blocking patterns:
-
-| Pattern | Description |
-|---------|-------------|
-| `sleep` | Non-blocking delay via `sleep()` |
-| `cpu_intensive` | CPU-bound via `hash_pbkdf2()` |
-| `file_io` | Intensive file read/write operations |
-
-```bash
-POST /api/simulations/slow/start
-{"delaySeconds": 10, "blockingPattern": "cpu_intensive"}
-```
 
 ### Crash Simulation
 

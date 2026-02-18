@@ -149,39 +149,6 @@ class Validation
     }
 
     /**
-     * Validates slow request parameters.
-     *
-     * @param array|mixed $data Array containing delaySeconds and optional blockingPattern
-     * @throws ValidationException if validation fails
-     */
-    public static function validateSlowRequestParams(mixed $data): array
-    {
-        if (!is_array($data)) {
-            throw new ValidationException("Invalid slow request parameters");
-        }
-
-        $delaySeconds = $data['delaySeconds'] ?? null;
-        $blockingPattern = $data['blockingPattern'] ?? 'sleep';
-
-        // Validate delaySeconds
-        $validatedDelay = self::validateInteger(
-            $delaySeconds, 'delaySeconds',
-            Config::MIN_DURATION_SECONDS, Config::maxDurationSeconds()
-        );
-
-        // Validate blockingPattern
-        $validPatterns = ['sleep', 'cpu_intensive', 'file_io'];
-        if (!in_array($blockingPattern, $validPatterns, true)) {
-            $blockingPattern = 'sleep'; // Default to sleep if invalid
-        }
-
-        return [
-            'delaySeconds' => $validatedDelay,
-            'blockingPattern' => $blockingPattern,
-        ];
-    }
-
-    /**
      * Validates a UUID format.
      *
      * @throws ValidationException if validation fails

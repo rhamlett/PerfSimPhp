@@ -23,7 +23,6 @@
  *   DELETE /api/simulations/memory/:id → MemoryController::release
  *   GET    /api/simulations/memory → MemoryController::list
  *   POST   /api/simulations/blocking → BlockingController::block
- *   GET    /api/simulations/slow  → SlowController::delay
  *   POST   /api/simulations/crash/* → CrashController::*
  *   GET    /api/loadtest          → LoadTestController::execute
  *   GET    /api/loadtest/stats    → LoadTestController::stats

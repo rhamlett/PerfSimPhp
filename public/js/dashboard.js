@@ -32,7 +32,6 @@
  *   When porting the backend to another language:
  *   - Update simulation names and descriptions to match the target runtime
  *   - Update crash types to match available crash mechanisms
- *   - Update slow request patterns to match the target runtime's I/O model
  *   - Update environment info fields for the target runtime
  */
 

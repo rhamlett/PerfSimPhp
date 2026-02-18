@@ -26,7 +26,6 @@
  * LATENCY STATISTICS:
  *   - Time-based rolling window (last 60 seconds)
  *   - Calculates: current, average, max, P99 from rolling window
- *   - Separate tracking for slow request latencies vs probe latencies
  *
  * SERVER RESPONSIVENESS MONITORING:
  *   - Tracks consecutive probe failures to detect unresponsive state
@@ -114,13 +113,6 @@ function getLatencyValuesLast60s() {
   latencyStats.entries = latencyStats.entries.filter(e => e.time >= cutoff);
   return latencyStats.entries.map(e => e.value);
 }
-
-// Slow request latency tracking (separate from probe latency)
-const slowRequestStats = {
-  values: [],
-  maxValues: 20,
-  lastLatency: null,
-};
 
 // Latency threshold colors for gradient fill
 const LATENCY_COLORS = {
@@ -377,26 +369,6 @@ function addLatencyToChart(latencyMs, timestamp) {
   if (latencyChart) {
     latencyChart.update('none');
   }
-}
-
-/**
- * Records a slow request latency for visualization.
- */
-function recordSlowRequestLatency(latencyMs) {
-  slowRequestStats.values.push(latencyMs);
-  if (slowRequestStats.values.length > slowRequestStats.maxValues) {
-    slowRequestStats.values.shift();
-  }
-  slowRequestStats.lastLatency = latencyMs;
-
-  addLatencyEntry(latencyMs);
-  addLatencyToChart(latencyMs);
-
-  if (latencyMs > 30000) {
-    latencyStats.critical++;
-  }
-
-  updateLatencyDisplay();
 }
 
 /**

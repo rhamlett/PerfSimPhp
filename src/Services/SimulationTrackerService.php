@@ -110,7 +110,6 @@ class SimulationTrackerService
             $message = match($sim['type']) {
                 'REQUEST_BLOCKING' => "Request thread blocking completed" . ($duration ? " after {$duration}s" : ""),
                 'CPU_STRESS' => "CPU stress simulation completed" . ($duration ? " after {$duration}s" : ""),
-                'SLOW_REQUEST' => "Slow request simulation completed",
                 default => "{$sim['type']} simulation completed",
             };
             

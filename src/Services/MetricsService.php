@@ -88,11 +88,6 @@ class MetricsService
         $blockingActive = $blockingMode !== null;
         $blockingDuration = $blockingMode['durationSeconds'] ?? 0;
 
-        // Slow request simulations
-        $slowSims = SimulationTrackerService::getActiveSimulationsByType('SLOW_REQUEST');
-        $slowActive = count($slowSims) > 0;
-        $slowCount = count($slowSims);
-
         return [
             'cpu' => [
                 'active' => $cpuActive,
@@ -107,10 +102,6 @@ class MetricsService
             'blocking' => [
                 'active' => $blockingActive,
                 'duration' => $blockingDuration,
-            ],
-            'slowRequests' => [
-                'active' => $slowActive,
-                'activeCount' => $slowCount,
             ],
         ];
     }

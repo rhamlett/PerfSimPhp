@@ -76,18 +76,6 @@ class MetricsController
             }
         }
         
-        // Slow requests active: Do real I/O work (file operations)
-        $slowSims = SimulationTrackerService::getActiveSimulationsByType('SLOW_REQUEST');
-        if (count($slowSims) > 0) {
-            // Perform real file I/O proportional to active slow requests
-            $tempFile = sys_get_temp_dir() . '/probe_' . getmypid() . '.tmp';
-            $data = str_repeat('X', 1024 * count($slowSims)); // 1KB per active slow request
-            file_put_contents($tempFile, $data);
-            $read = file_get_contents($tempFile);
-            @unlink($tempFile);
-            $workDone['io'] = strlen($read);
-        }
-
         return [
             'ts' => (int) (microtime(true) * 1000),
             'pid' => getmypid(),
@@ -100,7 +88,6 @@ class MetricsController
             '_debug' => [
                 'blockingActive' => $blockingSimCount > 0,
                 'memorySimCount' => count($memorySims ?? []),
-                'slowSimCount' => count($slowSims ?? []),
             ],
         ];
     }

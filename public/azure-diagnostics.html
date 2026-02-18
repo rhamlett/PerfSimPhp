@@ -441,35 +441,6 @@
         </div>
 
         <div class="scenario-card">
-          <div class="header slow">🐢 Slow Requests</div>
-          <div class="body">
-            <p><strong>Symptom:</strong> Specific endpoint takes long time, but other endpoints are NORMAL.</p>
-            <h4>What's Happening</h4>
-            <ul>
-              <li><strong>Sleep pattern:</strong> Uses <code>sleep()</code> / <code>usleep()</code> for delay</li>
-              <li><strong>CPU intensive:</strong> Uses <code>hash_pbkdf2()</code> computation</li>
-              <li><strong>File I/O:</strong> Intensive file read/write operations</li>
-              <li>Simulates slow database queries, external API calls, file processing</li>
-              <li><strong>Key difference from Request Thread Blocking:</strong> Only slow endpoint affected!</li>
-            </ul>
-            <h4>How to Identify</h4>
-            <p><em>Check if OTHER requests are affected.</em> Slow requests: only slow endpoint is slow. Request thread blocking: pool exhaustion affects EVERYTHING.</p>
-            <h4>Azure Diagnostic Tools</h4>
-            <ul>
-              <li>Application Insights &rarr; <strong>End-to-end transaction</strong></li>
-              <li>Application Insights &rarr; <strong>Dependency tracking</strong></li>
-              <li>Log Analytics &rarr; Request duration by endpoint</li>
-            </ul>
-            <h4>What to Look For</h4>
-            <ul>
-              <li>Which specific endpoint is slow</li>
-              <li>Dependency timing breakdown</li>
-              <li>FPM Workers Busy stays LOW (unless pool is small)</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="scenario-card">
           <div class="header crash">💥 Application Crash</div>
           <div class="body">
             <p><strong>Symptom:</strong> Individual requests fail with 500 errors, or entire FPM pool restarts.</p>

@@ -97,9 +97,6 @@ class Config
     /** Maximum concurrent workers to block (prevents exhausting entire FPM pool) */
     public const MAX_BLOCKING_CONCURRENT_WORKERS = 20;
 
-    /** Default slow request delay in seconds */
-    public const DEFAULT_SLOW_REQUEST_DELAY_SECONDS = 5;
-
     // =========================================================================
     // VALIDATION LIMITS
     // =========================================================================
