@@ -288,12 +288,15 @@ class MetricsService
      */
     public static function getProcessMetrics(): array
     {
-        $activeBlockingSimulations = count(SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING'));
+        $activeBlockingSimulations = SimulationTrackerService::getActiveSimulationsByType('REQUEST_BLOCKING');
         
-        // Try to get FPM pool status if available
-        // Note: php-fpm status page would need to be configured, so we estimate
-        // based on active blocking simulations plus 1 for this request
-        $busyWorkers = $activeBlockingSimulations;
+        // Count actual blocked workers from simulation parameters (not just simulation count)
+        // Each blocking simulation may block multiple workers
+        $busyWorkers = 0;
+        foreach ($activeBlockingSimulations as $sim) {
+            $workers = $sim['parameters']['concurrentWorkers'] ?? 1;
+            $busyWorkers += $workers;
+        }
         
         // Get RSS (Resident Set Size) from /proc if available
         $rssMb = self::getProcessRss();

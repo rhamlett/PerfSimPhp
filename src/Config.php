@@ -91,8 +91,8 @@ class Config
     /** Default blocking duration in seconds */
     public const DEFAULT_BLOCKING_DURATION_SECONDS = 5;
 
-    /** Default concurrent workers to block */
-    public const DEFAULT_BLOCKING_CONCURRENT_WORKERS = 1;
+    /** Default concurrent workers to block (5 is safe for most FPM pools) */
+    public const DEFAULT_BLOCKING_CONCURRENT_WORKERS = 5;
 
     /** Maximum concurrent workers to block (prevents exhausting entire FPM pool) */
     public const MAX_BLOCKING_CONCURRENT_WORKERS = 20;

@@ -539,23 +539,21 @@ async function releaseMemory() {
 /**
  * Blocks PHP-FPM worker threads.
  * Unlike Node.js event loop blocking, PHP blocking only affects individual
- * FPM worker processes. Blocking enough workers exhausts the pool.
+ * FPM worker processes. Blocks 5 workers by default to create visible impact.
  *
  * @param {number} durationSeconds - How long to block (1-60)
- * @param {number} concurrentWorkers - Number of FPM workers to block (1-20)
  */
-async function blockRequestThread(durationSeconds, concurrentWorkers = 1) {
+async function blockRequestThread(durationSeconds) {
   try {
-    const workerText = concurrentWorkers > 1 ? `${concurrentWorkers} workers` : 'request thread';
-    addEventToLog({ level: 'info', message: `Blocking ${workerText} for ${durationSeconds}s...` });
+    addEventToLog({ level: 'info', message: `Blocking FPM workers for ${durationSeconds}s...` });
     const response = await fetch('/api/simulations/blocking/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ durationSeconds, concurrentWorkers }),
+      body: JSON.stringify({ durationSeconds }),
     });
     const data = await response.json();
     if (response.ok) {
-      addEventToLog({ level: 'success', message: data.message || `Thread blocked for ${durationSeconds}s` });
+      addEventToLog({ level: 'success', message: data.message || `Workers blocked for ${durationSeconds}s` });
     } else {
       addEventToLog({ level: 'error', message: `Thread blocking failed: ${data.error || data.message || 'Unknown error'}` });
     }
@@ -820,8 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
     blockingForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const duration = parseInt(document.getElementById('blocking-duration')?.value || '5', 10);
-      const workers = parseInt(document.getElementById('blocking-workers')?.value || '1', 10);
-      blockRequestThread(duration, workers);
+      blockRequestThread(duration);
     });
   }
 

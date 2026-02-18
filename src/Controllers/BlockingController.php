@@ -35,8 +35,7 @@ class BlockingController
     /**
      * POST /api/simulations/blocking
      * Starts blocking mode for the specified duration.
-     * All probe requests during this window will experience latency.
-     * If concurrentWorkers > 1, spawns additional FPM workers that block.
+     * Spawns multiple FPM workers that block (default: 5 workers).
      */
     public static function block(): void
     {
@@ -46,15 +45,12 @@ class BlockingController
         // Set blocking mode (returns immediately)
         $simulation = BlockingService::block($params);
 
-        $concurrentWorkers = $params['concurrentWorkers'] ?? 1;
-        $workerMessage = $concurrentWorkers > 1 
-            ? "Blocking {$concurrentWorkers} FPM workers for {$params['durationSeconds']}s"
-            : "Blocking mode active for {$params['durationSeconds']}s — probe requests will experience latency";
-
+        $concurrentWorkers = $params['concurrentWorkers'];
+        
         echo json_encode([
             'id' => $simulation['id'],
             'type' => $simulation['type'],
-            'message' => $workerMessage,
+            'message' => "Blocking {$concurrentWorkers} FPM workers for {$params['durationSeconds']}s",
             'status' => $simulation['status'],
             'startedAt' => $simulation['startedAt'],
             'scheduledEndAt' => $simulation['scheduledEndAt'],
@@ -62,7 +58,7 @@ class BlockingController
             'concurrentWorkers' => $concurrentWorkers,
         ]);
 
-        // Spawn additional blocking workers AFTER sending response
+        // Spawn blocking workers AFTER sending response
         // This prevents the client from waiting for all workers to complete
         if ($concurrentWorkers > 1) {
             // Flush output and disconnect client first
@@ -70,7 +66,7 @@ class BlockingController
                 fastcgi_finish_request();
             }
             
-            // Now spawn (N-1) blocking requests - the dashboard polling will be the Nth
+            // Spawn (N-1) blocking requests - the initiator worker stays busy coordinating
             BlockingService::spawnConcurrentBlockingRequests(
                 $concurrentWorkers - 1,
                 $params['durationSeconds']
