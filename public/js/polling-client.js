@@ -324,20 +324,21 @@ function pollEventsOnce() {
 function startProbePolling() {
   if (probePollTimer) clearTimeout(probePollTimer);
 
-  // Use setTimeout instead of setInterval to prevent overlapping requests
-  // The internal probes endpoint takes ~500ms, so we wait for completion before scheduling next
-  scheduleNextProbe();
+  // Fire first probe immediately, then schedule subsequent probes after completion
+  console.log('[polling-client] Starting probe polling');
+  probeOnce();
 }
 
 /**
  * Schedules the next probe immediately after the current one completes.
  * Server response time (~1s) provides natural pacing between requests.
- * The setTimeout(0) ensures we don't block and allows current dispatch to proceed.
  */
 function scheduleNextProbe() {
+  // Small delay to prevent tight loop on errors
+  const delay = Math.max(PROBE_POLL_INTERVAL, 100);
   probePollTimer = setTimeout(() => {
     probeOnce();
-  }, PROBE_POLL_INTERVAL);
+  }, delay);
 }
 
 /**
@@ -369,6 +370,16 @@ function probeOnce() {
     .then(data => {
       onPollSuccess();
 
+      // Debug logging for troubleshooting
+      const failedProbes = data.probes?.filter(p => !p.success) || [];
+      if (failedProbes.length > 0) {
+        console.warn('[polling-client] Internal probes failed:', {
+          port: data.internalPort,
+          failedCount: failedProbes.length,
+          firstError: failedProbes[0]?._debug
+        });
+      }
+
       // Process each probe in the batch, dispatching at 100ms intervals
       // This gives smooth chart updates while only making 1 request/sec to AppLens
       if (data.probes && Array.isArray(data.probes)) {
@@ -388,6 +399,7 @@ function probeOnce() {
       }
     })
     .catch(error => {
+      console.error('[polling-client] Probe batch failed:', error.message || error);
       // Report a single failure for the batch
       if (typeof onProbeLatency === 'function') {
         onProbeLatency({

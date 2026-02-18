@@ -122,8 +122,9 @@ class MetricsController
         $count = min((int) ($_GET['count'] ?? 5), 10);
         $intervalMs = max((int) ($_GET['interval'] ?? 100), 50);
         
-        // Use localhost:8080 to bypass stamp frontend
-        $baseUrl = 'http://localhost:8080/api/metrics/probe';
+        // Determine internal port - Azure App Service uses 8080, nginx fallback is 80
+        $port = getenv('WEBSITES_PORT') ?: '8080';
+        $baseUrl = "http://127.0.0.1:{$port}/api/metrics/probe";
         
         $results = [];
         $stats = LoadTestService::getCurrentStats();
@@ -144,18 +145,31 @@ class MetricsController
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
+            $errno = curl_errno($ch);
             curl_close($ch);
             
             $probeEnd = microtime(true);
             $latencyMs = ($probeEnd - $probeStart) * 1000;
             
-            $results[] = [
+            $probeResult = [
                 'latencyMs' => round($latencyMs, 2),
                 'timestamp' => (int) ($probeEnd * 1000),
                 'success' => $httpCode === 200 && empty($error),
                 'loadTestActive' => $stats['currentConcurrentRequests'] > 0,
                 'loadTestConcurrent' => $stats['currentConcurrentRequests'],
             ];
+            
+            // Add debug info if probe failed
+            if ($httpCode !== 200 || !empty($error)) {
+                $probeResult['_debug'] = [
+                    'httpCode' => $httpCode,
+                    'error' => $error,
+                    'errno' => $errno,
+                    'url' => $baseUrl,
+                ];
+            }
+            
+            $results[] = $probeResult;
             
             // Wait between probes (except after last one)
             if ($i < $count - 1) {
@@ -168,6 +182,7 @@ class MetricsController
             'count' => count($results),
             'intervalMs' => $intervalMs,
             'pid' => getmypid(),
+            'internalPort' => $port,
         ];
     }
 }
