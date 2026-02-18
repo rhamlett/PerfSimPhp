@@ -31,10 +31,15 @@ class CrashController
      */
     public static function failfast(): void
     {
+        // Record crash BEFORE finishing request to ensure it's stored
+        \PerfSimPhp\Services\CrashTrackingService::recordCrash('failfast');
+        
+        header('Content-Type: application/json');
         http_response_code(202);
         echo json_encode([
             'message' => 'FailFast initiated - PHP-FPM worker will terminate via exit(1)',
             'warning' => 'The PHP-FPM worker will terminate immediately. A new worker will be spawned automatically.',
+            'workerPid' => getmypid(),
             'timestamp' => date('c'),
         ]);
 
@@ -55,10 +60,15 @@ class CrashController
      */
     public static function stackoverflow(): void
     {
+        // Record crash BEFORE finishing request to ensure it's stored
+        \PerfSimPhp\Services\CrashTrackingService::recordCrash('stackoverflow');
+        
+        header('Content-Type: application/json');
         http_response_code(202);
         echo json_encode([
             'message' => 'Stack overflow initiated - PHP-FPM worker will terminate via infinite recursion',
             'warning' => 'The PHP-FPM worker will terminate. Stack overflow may require manual restart on Azure.',
+            'workerPid' => getmypid(),
             'timestamp' => date('c'),
         ]);
 
@@ -78,10 +88,15 @@ class CrashController
      */
     public static function exception(): void
     {
+        // Record crash BEFORE finishing request to ensure it's stored
+        \PerfSimPhp\Services\CrashTrackingService::recordCrash('exception');
+        
+        header('Content-Type: application/json');
         http_response_code(202);
         echo json_encode([
             'message' => 'Crash initiated - PHP-FPM worker will terminate via fatal error',
             'warning' => 'The PHP-FPM worker will terminate. A new worker will be spawned automatically.',
+            'workerPid' => getmypid(),
             'timestamp' => date('c'),
         ]);
 
@@ -101,10 +116,15 @@ class CrashController
      */
     public static function memory(): void
     {
+        // Record crash BEFORE finishing request to ensure it's stored
+        \PerfSimPhp\Services\CrashTrackingService::recordCrash('oom');
+        
+        header('Content-Type: application/json');
         http_response_code(202);
         echo json_encode([
             'message' => 'Memory exhaustion initiated - PHP-FPM worker will terminate with OOM error',
             'warning' => 'The PHP-FPM worker will terminate. OOM crashes may require manual restart on Azure.',
+            'workerPid' => getmypid(),
             'timestamp' => date('c'),
         ]);
 
@@ -140,6 +160,7 @@ class CrashController
         
         $result = CrashService::initiateMultiWorkerCrash($workerCount, $crashType);
         
+        header('Content-Type: application/json');
         http_response_code(202);
         echo json_encode([
             'message' => "Multi-worker crash initiated: {$result['initiated']} workers will crash",

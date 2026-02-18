@@ -66,9 +66,6 @@ class CrashService
      */
     public static function crashWithFailFast(): void
     {
-        // Track the crash
-        CrashTrackingService::recordCrash('failfast');
-        
         EventLogService::error(
             'SIMULATION_STARTED',
             'Crash simulation initiated: FailFast (exit)',
@@ -93,9 +90,6 @@ class CrashService
      */
     public static function crashWithStackOverflow(): void
     {
-        // Track the crash
-        CrashTrackingService::recordCrash('stackoverflow');
-        
         EventLogService::error(
             'SIMULATION_STARTED',
             'Crash simulation initiated: stack overflow',
@@ -131,9 +125,6 @@ class CrashService
      */
     public static function crashWithFatalError(): void
     {
-        // Track the crash
-        CrashTrackingService::recordCrash('exception');
-        
         EventLogService::error(
             'SIMULATION_STARTED',
             'Crash simulation initiated: fatal error',
@@ -159,9 +150,6 @@ class CrashService
      */
     public static function crashWithMemoryExhaustion(): void
     {
-        // Track the crash
-        CrashTrackingService::recordCrash('oom');
-        
         EventLogService::error(
             'SIMULATION_STARTED',
             'Crash simulation initiated: memory exhaustion',
@@ -275,23 +263,14 @@ class CrashService
 
     /**
      * Get the internal base URL for self-requests.
+     * On Azure, we must use the actual HTTP_HOST, not localhost.
      */
     private static function getInternalBaseUrl(): string
     {
-        // Try to detect from server variables
+        // Use the actual host from the request - required for Azure
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $scheme = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
-        $port = $_SERVER['SERVER_PORT'] ?? 80;
         
-        // For internal requests, prefer localhost to avoid NAT/proxy issues
-        if (str_contains($host, ':')) {
-            return "{$scheme}://localhost" . substr($host, strpos($host, ':'));
-        }
-        
-        if ($port != 80 && $port != 443) {
-            return "{$scheme}://localhost:{$port}";
-        }
-        
-        return "{$scheme}://localhost";
+        return "{$scheme}://{$host}";
     }
 }
