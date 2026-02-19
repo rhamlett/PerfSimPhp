@@ -58,8 +58,15 @@ class LoadTestController
             $result = LoadTestService::executeWork($request);
             echo json_encode($result);
         } catch (\Throwable $e) {
-            // Re-throw to let the error handler produce a 500
-            throw $e;
+            // Log full details and show actual error for debugging
+            error_log("[LoadTestController] " . get_class($e) . ": " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+            http_response_code(500);
+            echo json_encode([
+                'error' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => basename($e->getFile()),
+                'line' => $e->getLine(),
+            ]);
         }
     }
 

@@ -43,10 +43,9 @@ class RequestLogger
         $timestamp = date('Y-m-d\TH:i:s.v\Z');
         $logMessage = "[{$timestamp}] {$method} {$uri} {$statusCode} {$durationMs}ms";
 
+        // Only log errors to PHP error log to prevent log bloat
+        // Non-error requests are not logged (use Azure App Service logs for access logs)
         if ($isError) {
-            error_log($logMessage);
-        } else {
-            // Use error_log for stdout in PHP-FPM
             error_log($logMessage);
         }
     }
