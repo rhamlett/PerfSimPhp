@@ -17,10 +17,14 @@
  *   - Memory Churn  : Allocate/serialize/free (visible in memory metrics)
  *   - JSON Process  : Deep encode/decode (visible in CPU + memory)
  *
+ * SAFEGUARDS (prevent app lockup):
+ *   - MAX_DURATION_MS = 60000     : No request can run longer than 60 seconds
+ *   - MAX_DEGRADATION_MULTIPLIER = 30 : Caps exponential degradation
+ *
  * DEGRADATION BEHAVIOR:
  *   Below soft limit: ~targetDurationMs response time
- *   Above soft limit: targetDurationMs * degradationFactor^(concurrent - softLimit)
- *   This creates exponential backpressure with real work, not artificial delays.
+ *   Above soft limit: targetDurationMs * min(degradationFactor^overLimit, 30)
+ *   Duration is capped at 60 seconds maximum regardless of degradation.
  *
  * @module src/Controllers/LoadTestController.php
  */
@@ -38,24 +42,30 @@ class LoadTestController
      * Executes a load test request with configurable resource consumption.
      *
      * QUERY PARAMETERS (all optional):
-     *   - cpuWorkMs (int)        : Ms of CPU work per cycle (default: 50)
-     *   - memorySizeKb (int)     : KB of persistent memory (default: 5000 = 5MB)
-     *   - fileIoKb (int)         : KB to write/read per cycle (default: 100)
-     *   - jsonDepth (int)        : Nesting depth for JSON work (default: 5)
-     *   - memoryChurnKb (int)    : KB to churn per cycle (default: 500)
-     *   - targetDurationMs (int) : Target request duration (default: 1000)
-     *   - softLimit (int)        : Concurrent before degradation (default: 20)
-     *   - degradationFactor (float): Multiplier per concurrent over limit (default: 1.5)
+     *   - cpuWorkMs (int)         : Ms of CPU work per cycle (default: 20)
+     *   - memorySizeKb (int)      : KB of persistent memory (default: 5000 = 5MB)
+     *   - fileIoKb (int)          : KB to write/read per cycle (default: 20)
+     *   - jsonDepth (int)         : Nesting depth for JSON work (default: 3)
+     *   - memoryChurnKb (int)     : KB to churn per cycle (default: 100)
+     *   - targetDurationMs (int)  : Target request duration (default: 1000)
+     *   - baselineDelayMs (int)   : DEPRECATED alias for targetDurationMs
+     *   - softLimit (int)         : Concurrent before degradation (default: 20)
+     *   - degradationFactor (float): Multiplier per concurrent over limit (default: 1.2)
      *
      * EXAMPLES:
-     *   GET /api/loadtest?cpuWorkMs=100&fileIoKb=200
+     *   GET /api/loadtest?cpuWorkMs=50&fileIoKb=50
      *   GET /api/loadtest?targetDurationMs=2000&softLimit=10
      */
     public static function execute(): void
     {
         // Parse optional query parameters (integers)
+        // Includes backwards-compatible old param names
         $request = [];
-        $intParams = ['cpuWorkMs', 'memorySizeKb', 'fileIoKb', 'jsonDepth', 'memoryChurnKb', 'targetDurationMs', 'softLimit'];
+        $intParams = [
+            'cpuWorkMs', 'memorySizeKb', 'fileIoKb', 'jsonDepth', 'memoryChurnKb', 
+            'targetDurationMs', 'softLimit',
+            'baselineDelayMs',  // OLD: maps to targetDurationMs in service
+        ];
 
         foreach ($intParams as $param) {
             if (isset($_GET[$param]) && is_numeric($_GET[$param])) {

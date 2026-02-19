@@ -3,13 +3,16 @@ require 'vendor/autoload.php';
 
 use PerfSimPhp\Services\LoadTestService;
 
+// Standard test with new params
+echo "Testing LoadTestService with safe defaults...\n";
+
 try {
     $result = LoadTestService::executeWork([
-        'cpuWorkMs' => 50,
+        'cpuWorkMs' => 20,
         'memorySizeKb' => 1000,
-        'fileIoKb' => 50,
+        'fileIoKb' => 20,
         'jsonDepth' => 3,
-        'memoryChurnKb' => 200,
+        'memoryChurnKb' => 100,
         'targetDurationMs' => 500,
     ]);
     print_r($result);

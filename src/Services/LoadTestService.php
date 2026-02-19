@@ -54,16 +54,22 @@ class LoadTestService
     /** Directory for temp file I/O work */
     private const TEMP_DIR = '/tmp/loadtest';
 
+    /** Maximum allowed duration to prevent runaway (60 seconds) */
+    private const MAX_DURATION_MS = 60000;
+
+    /** Maximum degradation multiplier to prevent exponential explosion */
+    private const MAX_DEGRADATION_MULTIPLIER = 30.0;
+
     /** Default request parameters */
     private const DEFAULTS = [
-        'cpuWorkMs' => 50,           // Ms of CPU work per cycle (hash_pbkdf2)
+        'cpuWorkMs' => 20,           // Ms of CPU work per cycle (reduced from 50)
         'memorySizeKb' => 5000,      // 5MB persistent allocation
-        'fileIoKb' => 100,           // KB to write/read per cycle
-        'jsonDepth' => 5,            // Nesting depth for JSON work
-        'memoryChurnKb' => 500,      // KB to churn per cycle
+        'fileIoKb' => 20,            // KB to write/read per cycle (reduced from 100)
+        'jsonDepth' => 3,            // Nesting depth for JSON work (reduced from 5)
+        'memoryChurnKb' => 100,      // KB to churn per cycle (reduced from 500)
         'targetDurationMs' => 1000,  // Target request duration
         'softLimit' => 20,           // Concurrent before degradation
-        'degradationFactor' => 1.5,  // Multiplier per concurrent over limit
+        'degradationFactor' => 1.2,  // Multiplier per concurrent over limit (reduced from 1.5)
     ];
 
     /**
@@ -83,6 +89,11 @@ class LoadTestService
      */
     public static function executeWork(array $request = []): array
     {
+        // Backwards compatibility: map old param names to new ones
+        if (isset($request['baselineDelayMs']) && !isset($request['targetDurationMs'])) {
+            $request['targetDurationMs'] = $request['baselineDelayMs'];
+        }
+
         // Merge with defaults
         $params = array_merge(self::DEFAULTS, $request);
 
@@ -93,10 +104,12 @@ class LoadTestService
         $currentConcurrent = self::incrementConcurrent();
 
         // Calculate degradation multiplier (exponential backpressure)
+        // CAPPED to prevent runaway when degradationFactor is too high
         $overLimit = max(0, $currentConcurrent - $params['softLimit']);
-        $degradationMultiplier = $overLimit > 0 
+        $rawMultiplier = $overLimit > 0 
             ? pow($params['degradationFactor'], $overLimit)
             : 1.0;
+        $degradationMultiplier = min($rawMultiplier, self::MAX_DEGRADATION_MULTIPLIER);
         
         // Work metrics tracking
         $workMetrics = [
@@ -118,6 +131,7 @@ class LoadTestService
                 'overLimit' => $overLimit,
                 'degradationMultiplier' => round($degradationMultiplier, 2),
                 'targetDurationMs' => $params['targetDurationMs'],
+                'multiplierCapped' => $rawMultiplier > self::MAX_DEGRADATION_MULTIPLIER,
             ]
         );
 
@@ -138,8 +152,10 @@ class LoadTestService
             // -----------------------------------------------------------------
             // STEP 2: CALCULATE TARGET DURATION WITH DEGRADATION
             // More concurrent requests = more work cycles = longer duration
+            // CAPPED to MAX_DURATION_MS to prevent runaway
             // -----------------------------------------------------------------
-            $targetDurationMs = $params['targetDurationMs'] * $degradationMultiplier;
+            $rawTargetDurationMs = $params['targetDurationMs'] * $degradationMultiplier;
+            $targetDurationMs = min($rawTargetDurationMs, self::MAX_DURATION_MS);
 
             // -----------------------------------------------------------------
             // STEP 3: REAL WORK LOOP (NO usleep!)
