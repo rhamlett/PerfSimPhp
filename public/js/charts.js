@@ -92,6 +92,51 @@ const latencyStats = {
   critical: 0,
 };
 
+// Load test activity tracking - logs periodic stats during active load testing
+const loadTestTracking = {
+  isActive: false,
+  lastStatsLogTime: 0,
+  statsIntervalMs: 60000,  // Log every 60 seconds
+  lastConcurrent: 0,
+};
+
+/**
+ * Checks if load test stats should be logged and logs them.
+ * Called from onProbeLatency when load test is active.
+ */
+function checkLoadTestStatsLog(loadTestActive, concurrent) {
+  const now = Date.now();
+  
+  // Detect load test becoming active
+  if (loadTestActive && !loadTestTracking.isActive) {
+    loadTestTracking.isActive = true;
+    loadTestTracking.lastStatsLogTime = now;
+    loadTestTracking.lastConcurrent = concurrent;
+  }
+  
+  // Detect load test becoming inactive
+  if (!loadTestActive && loadTestTracking.isActive) {
+    loadTestTracking.isActive = false;
+  }
+  
+  // Log stats every 60 seconds while load test is active
+  if (loadTestTracking.isActive && (now - loadTestTracking.lastStatsLogTime >= loadTestTracking.statsIntervalMs)) {
+    loadTestTracking.lastStatsLogTime = now;
+    loadTestTracking.lastConcurrent = concurrent;
+    
+    // Calculate average latency from entries in the last 60 seconds
+    const values = getLatencyValuesLast60s();
+    if (values.length > 0 && typeof addEventToLog === 'function') {
+      const avgLatency = values.reduce((sum, v) => sum + v, 0) / values.length;
+      const maxLatency = Math.max(...values);
+      addEventToLog({
+        level: 'info',
+        message: `📊 Load Test Stats (60s): avg ${avgLatency.toFixed(0)}ms, max ${maxLatency.toFixed(0)}ms, ${values.length} samples`
+      });
+    }
+  }
+}
+
 /**
  * Adds a latency entry and prunes entries older than 60 seconds.
  * @param {number} latencyMs - The latency value in milliseconds
@@ -293,6 +338,9 @@ function onProbeLatency(data) {
   serverResponsiveness.lastProbeTime = Date.now();
   updateResponsivenessUI();
   updateLatencyDisplay();
+  
+  // Track load test activity and log periodic stats
+  checkLoadTestStatsLog(data.loadTestActive, data.loadTestConcurrent);
 }
 
 /**
