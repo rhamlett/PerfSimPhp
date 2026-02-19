@@ -475,34 +475,41 @@ POST /api/simulations/memory/release</code></pre>
       <pre><code># With defaults
 https://perfsimphp.azurewebsites.net/api/loadtest
 
-# Custom parameters
-https://perfsimphp.azurewebsites.net/api/loadtest?cpuWorkMs=200&amp;memorySizeKb=20000
+# All parameters (defaults shown)
+https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=5000&amp;cpuWorkMs=20&amp;softLimit=20&amp;degradationFactor=1.2
 
-# Memory only (no CPU work)
-https://perfsimphp.azurewebsites.net/api/loadtest?cpuWorkMs=0&amp;memorySizeKb=100</code></pre>
+# CPU intensive
+https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=500&amp;cpuWorkMs=100&amp;memorySizeKb=2000
+
+# Memory pressure
+https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=50000&amp;cpuWorkMs=5</code></pre>
 
       <h3>Query Parameters</h3>
       <table>
         <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
-        <tr><td><code>cpuWorkMs</code></td><td>100</td><td>Milliseconds of real CPU work per cycle (uses hash_pbkdf2)</td></tr>
-        <tr><td><code>memorySizeKb</code></td><td>10000</td><td>Memory buffer held for entire request duration (KB) - increase to stress/crash</td></tr>
-        <tr><td><code>baselineDelayMs</code></td><td>1000</td><td>Minimum request duration (ms)</td></tr>
+        <tr><td><code>targetDurationMs</code></td><td>1000</td><td>Target request duration in ms (alias: baselineDelayMs)</td></tr>
+        <tr><td><code>memorySizeKb</code></td><td>5000</td><td>Memory buffer held for entire request duration (KB) - increase to stress/crash</td></tr>
+        <tr><td><code>cpuWorkMs</code></td><td>20</td><td>Milliseconds of CPU work per cycle (uses hash_pbkdf2)</td></tr>
         <tr><td><code>softLimit</code></td><td>20</td><td>Concurrent requests before degradation begins</td></tr>
-        <tr><td><code>degradationFactor</code></td><td>1000</td><td>Delay ms added per request over soft limit</td></tr>
+        <tr><td><code>degradationFactor</code></td><td>1.2</td><td>Multiplier per concurrent request over soft limit</td></tr>
       </table>
+
+      <div class="info-box">
+        <strong>Safeguards:</strong> Max duration 60 seconds, max degradation 30x (prevents runaway).
+      </div>
 
       <h3>Behavior (Sustained Resource Consumption)</h3>
       <ul>
         <li><strong>Memory:</strong> Allocated up front and held for entire request duration (visible in Azure Memory metrics)</li>
-        <li><strong>CPU:</strong> Interleaved work cycles (hash_pbkdf2 + usleep) creating sustained CPU usage per active FPM worker</li>
-        <li><strong>Degradation:</strong> Blocking delay = baselineDelayMs + max(0, concurrent - softLimit) &times; degradationFactor</li>
+        <li><strong>CPU:</strong> Real work cycles using hash_pbkdf2, file I/O, memory churn, and JSON processing</li>
+        <li><strong>Degradation:</strong> duration = targetDurationMs &times; min(degradationFactor<sup>overLimit</sup>, 30) — capped at 60s</li>
         <li><strong>After 120 seconds:</strong> 20% chance of throwing a random exception per check interval</li>
-        <li><strong>Extreme load:</strong> Can reach Azure's 230-second timeout threshold</li>
+        <li><strong>Safeguards:</strong> Built-in caps prevent runaway (60s max, 30x max multiplier)</li>
       </ul>
 
       <h3>What It Tests</h3>
       <ul>
-        <li><strong>CPU</strong> &mdash; Sustained hash_pbkdf2() cycles per active FPM worker</li>
+        <li><strong>CPU</strong> &mdash; Real hash_pbkdf2() work, file I/O, memory churn, JSON processing</li>
         <li><strong>Memory</strong> &mdash; Buffers held for entire request duration</li>
         <li><strong>FPM Workers</strong> &mdash; Worker pool exhaustion under concurrent load</li>
         <li><strong>Timeouts</strong> &mdash; Random exceptions after 120s (20% probability)</li>

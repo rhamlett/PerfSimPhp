@@ -5,30 +5,23 @@
  * =============================================================================
  *
  * PURPOSE:
- *   Provides a load test endpoint designed for Azure Load Testing (or similar
- *   tools like JMeter, k6, Gatling). Performs REAL work that creates observable
- *   metrics impact — no artificial usleep() delays.
+ *   Load test endpoint for Azure Load Testing, JMeter, k6, Gatling.
+ *   Performs REAL work (CPU, I/O, memory) that shows in metrics.
  *
- * QUERY PARAMETERS:
- *   - cpuWorkMs (default: 50)          — Milliseconds of CPU work per cycle (hash_pbkdf2)
- *   - memorySizeKb (default: 5000)     — KB of memory to allocate (5MB default)
- *   - fileIoKb (default: 100)          — KB to write/read per cycle (disk I/O)
- *   - jsonDepth (default: 5)           — Nested depth for JSON encode/decode work
- *   - memoryChurnKb (default: 500)     — KB to churn (allocate/serialize) per cycle
- *   - targetDurationMs (default: 1000) — Target total duration for the request
+ * PARAMETERS (5 tunable):
+ *   - targetDurationMs (default: 1000) — Base request duration in ms
+ *   - memorySizeKb (default: 5000)     — Memory to allocate in KB
+ *   - cpuWorkMs (default: 20)          — CPU work per cycle in ms
  *   - softLimit (default: 20)          — Concurrent requests before degradation
- *   - degradationFactor (default: 1.5) — Multiplier per concurrent over softLimit
+ *   - degradationFactor (default: 1.2) — Multiplier per concurrent over limit
  *
- * WORK TYPES (all contribute to visible metrics):
- *   1. CPU Work      — hash_pbkdf2 cryptographic operations (CPU metrics)
- *   2. File I/O      — Write/read temp files (I/O metrics, disk contention)
- *   3. Memory Churn  — Allocate/serialize/deallocate arrays (memory metrics)
- *   4. JSON Process  — Deep encode/decode of nested structures (CPU + memory)
+ * SAFEGUARDS:
+ *   - Max duration: 60 seconds (prevents runaway)
+ *   - Max degradation: 30x (caps exponential growth)
  *
  * DEGRADATION FORMULA:
- *   Each work cycle takes: cpuWorkMs + fileIoMs + memoryChurnMs + jsonWorkMs
- *   Over soft limit: cycles *= degradationFactor ^ (concurrent - softLimit)
- *   This creates exponential backpressure visible in all metrics.
+ *   duration = targetDurationMs × min(degradationFactor^overLimit, 30)
+ *   Capped at 60 seconds regardless of parameters.
  *
  * @module src/Services/LoadTestService.php
  */
@@ -62,15 +55,17 @@ class LoadTestService
 
     /** Default request parameters */
     private const DEFAULTS = [
-        'cpuWorkMs' => 20,           // Ms of CPU work per cycle (reduced from 50)
-        'memorySizeKb' => 5000,      // 5MB persistent allocation
-        'fileIoKb' => 20,            // KB to write/read per cycle (reduced from 100)
-        'jsonDepth' => 3,            // Nesting depth for JSON work (reduced from 5)
-        'memoryChurnKb' => 100,      // KB to churn per cycle (reduced from 500)
-        'targetDurationMs' => 1000,  // Target request duration
-        'softLimit' => 20,           // Concurrent before degradation
-        'degradationFactor' => 1.2,  // Multiplier per concurrent over limit (reduced from 1.5)
+        'targetDurationMs' => 1000,  // Target request duration (ms)
+        'memorySizeKb' => 5000,      // Memory to allocate (KB)
+        'cpuWorkMs' => 20,           // CPU work per cycle (ms)
+        'softLimit' => 20,           // Concurrent requests before degradation
+        'degradationFactor' => 1.2,  // Multiplier per concurrent over limit
     ];
+
+    /** Internal work settings (not user-tunable) */
+    private const INTERNAL_FILE_IO_KB = 20;
+    private const INTERNAL_JSON_DEPTH = 3;
+    private const INTERNAL_MEMORY_CHURN_KB = 100;
 
     /**
      * Returns the default request parameters.
@@ -170,19 +165,13 @@ class LoadTestService
                 }
 
                 // File I/O Work - write/read temp file (visible in I/O metrics)
-                if ($params['fileIoKb'] > 0) {
-                    $workMetrics['fileIoMs'] += self::performFileIoWork($tempFile, $params['fileIoKb']);
-                }
+                $workMetrics['fileIoMs'] += self::performFileIoWork($tempFile, self::INTERNAL_FILE_IO_KB);
 
                 // Memory Churn - allocate/serialize/free (visible in memory metrics)
-                if ($params['memoryChurnKb'] > 0) {
-                    $workMetrics['memoryChurnMs'] += self::performMemoryChurnWork($params['memoryChurnKb']);
-                }
+                $workMetrics['memoryChurnMs'] += self::performMemoryChurnWork(self::INTERNAL_MEMORY_CHURN_KB);
 
                 // JSON Processing - deep encode/decode (visible in CPU + alloc)
-                if ($params['jsonDepth'] > 0) {
-                    $workMetrics['jsonWorkMs'] += self::performJsonWork($params['jsonDepth']);
-                }
+                $workMetrics['jsonWorkMs'] += self::performJsonWork(self::INTERNAL_JSON_DEPTH);
 
                 // Touch persistent memory to prevent optimization
                 self::touchMemory($memory);

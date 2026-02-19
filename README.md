@@ -168,20 +168,22 @@ PHP-FPM master automatically respawns crashed workers.
 Dedicated endpoint for Azure Load Testing:
 
 ```
-GET /api/loadtest?cpuWorkMs=50&memorySizeKb=5000&baselineDelayMs=500
+GET /api/loadtest?targetDurationMs=1000&memorySizeKb=5000&cpuWorkMs=20&softLimit=20&degradationFactor=1.2
 GET /api/loadtest/stats
 ```
 
 **Query Parameters (all optional):**
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `cpuWorkMs` | 100 | Milliseconds of real CPU work per cycle (uses hash_pbkdf2) |
-| `memorySizeKb` | 10000 | KB of memory to allocate per request (increase to trigger OOM) |
-| `baselineDelayMs` | 1000 | Minimum response time before degradation |
+| `targetDurationMs` | 1000 | Target request duration in ms (alias: `baselineDelayMs`) |
+| `memorySizeKb` | 5000 | KB of memory to allocate per request (increase to trigger OOM) |
+| `cpuWorkMs` | 20 | Milliseconds of CPU work per cycle (uses hash_pbkdf2) |
 | `softLimit` | 20 | Concurrent requests before degradation starts |
-| `degradationFactor` | 1000 | Milliseconds added per request over softLimit |
+| `degradationFactor` | 1.2 | Multiplier per concurrent request over softLimit |
 
-**Degradation Formula:** `responseTime = baselineDelayMs + max(0, concurrent - softLimit) * degradationFactor`
+**Safeguards:** Max duration 60s, max degradation 30x (prevents runaway).
+
+**Degradation Formula:** `duration = targetDurationMs × min(degradationFactor^overLimit, 30)` capped at 60s
 
 ## 🔬 Diagnostics
 

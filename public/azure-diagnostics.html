@@ -856,11 +856,11 @@ script_filename = /home/site/wwwroot/public/index.php
       <h3>Load Test Endpoint</h3>
       <p>The <code>/api/loadtest</code> endpoint is designed to:</p>
       <ul>
-        <li>Perform sustained CPU work (interleaved <code>hash_pbkdf2()</code> cycles)</li>
+        <li>Perform real CPU work (hash_pbkdf2, file I/O, memory churn, JSON processing)</li>
         <li>Hold memory buffers for entire request duration (creates visible memory pressure)</li>
-        <li>Degrade gracefully as concurrent requests increase (soft limit pattern)</li>
+        <li>Degrade exponentially as concurrent requests increase (soft limit pattern)</li>
         <li>Throw random exceptions after 120 seconds (20% probability)</li>
-        <li>Eventually trigger Azure's 230-second timeout under extreme load</li>
+        <li>Built-in safeguards: max 60s duration, max 30x degradation multiplier</li>
       </ul>
 
       <h3>Setting Up Azure Load Testing</h3>
@@ -874,18 +874,21 @@ script_filename = /home/site/wwwroot/public/index.php
       <pre><code># With defaults
 https://your-app.azurewebsites.net/api/loadtest
 
-# Custom parameters
-https://your-app.azurewebsites.net/api/loadtest?cpuWorkMs=200&amp;memorySizeKb=20000
+# All parameters (defaults shown)
+https://your-app.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=5000&amp;cpuWorkMs=20&amp;softLimit=20&amp;degradationFactor=1.2
 
-# FPM pool only (no CPU work)
-https://your-app.azurewebsites.net/api/loadtest?cpuWorkMs=0&amp;memorySizeKb=100</code></pre>
+# CPU intensive scenario
+https://your-app.azurewebsites.net/api/loadtest?targetDurationMs=500&amp;cpuWorkMs=100&amp;memorySizeKb=2000
+
+# Memory pressure scenario
+https://your-app.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=50000&amp;cpuWorkMs=5</code></pre>
       <p><strong>Query Parameters:</strong></p>
       <ul>
-        <li><code>cpuWorkMs</code> - Milliseconds of real CPU work per cycle using hash_pbkdf2 (default: 100)</li>
-        <li><code>memorySizeKb</code> - Memory buffer held for request duration in KB (default: 10000 = 10MB)</li>
-        <li><code>baselineDelayMs</code> - Minimum request duration in ms (default: 1000)</li>
+        <li><code>targetDurationMs</code> - Target request duration in ms (default: 1000, alias: baselineDelayMs)</li>
+        <li><code>memorySizeKb</code> - Memory buffer held for request duration in KB (default: 5000 = 5MB)</li>
+        <li><code>cpuWorkMs</code> - Milliseconds of real CPU work per cycle using hash_pbkdf2 (default: 20)</li>
         <li><code>softLimit</code> - Concurrent requests before degradation (default: 20)</li>
-        <li><code>degradationFactor</code> - Delay ms per request over limit (default: 1000)</li>
+        <li><code>degradationFactor</code> - Multiplier per concurrent request over limit (default: 1.2)</li>
       </ul>
 
       <ol start="3">
@@ -894,10 +897,11 @@ https://your-app.azurewebsites.net/api/loadtest?cpuWorkMs=0&amp;memorySizeKb=100
       </ol>
 
       <h3>Understanding the Soft Limit</h3>
-      <p>The soft limit creates a degradation curve where response times increase as concurrent requests exceed the threshold. The degradation formula is:</p>
-      <pre><code>additionalDelay = max(0, concurrent - softLimit) &times; degradationFactor</code></pre>
+      <p>The soft limit creates an exponential degradation curve where response times increase as concurrent requests exceed the threshold. The degradation formula is:</p>
+      <pre><code>duration = targetDurationMs × min(degradationFactor^overLimit, 30)
+# Capped at MAX_DURATION_MS = 60 seconds</code></pre>
       <div class="alert-box info">
-        <strong>Note:</strong> Actual response times will vary based on your Azure App Service tier, PHP-FPM pool size, and other factors. Use Azure Load Testing to establish baseline performance for your specific environment. These example scenarios, and the defaults, are for a Premium0V3 worker. Any other SKU or worker size will need individual tuning.
+        <strong>Safeguards:</strong> The maximum duration is capped at 60 seconds, and the maximum degradation multiplier is capped at 30x, preventing runaway scenarios regardless of parameter values.
       </div>
 
       <h3>Diagnosing Load Test Results</h3>
@@ -932,11 +936,11 @@ https://your-app.azurewebsites.net/api/loadtest?cpuWorkMs=0&amp;memorySizeKb=100
       <p>Each parameter controls a specific resource independently:</p>
       <table class="comparison-table">
         <tr><th>Parameter</th><th>Default</th><th>Resource</th><th>Purpose</th></tr>
-        <tr><td><code>cpuWorkMs</code></td><td>100</td><td><strong>CPU</strong></td><td>Milliseconds of real CPU work per cycle using hash_pbkdf2(). Higher = more CPU per cycle.</td></tr>
-        <tr><td><code>memorySizeKb</code></td><td>10000</td><td><strong>Memory</strong></td><td>Memory buffer held for entire request duration. Increase to trigger OOM errors.</td></tr>
-        <tr><td><code>baselineDelayMs</code></td><td>1000</td><td><strong>FPM Worker</strong></td><td>Minimum request duration (ms). CPU work and sleep interleaved throughout, occupying a worker.</td></tr>
+        <tr><td><code>targetDurationMs</code></td><td>1000</td><td><strong>FPM Worker</strong></td><td>Target request duration (ms). Real work performed until duration reached. Alias: baselineDelayMs.</td></tr>
+        <tr><td><code>memorySizeKb</code></td><td>5000</td><td><strong>Memory</strong></td><td>Memory buffer held for entire request duration. Increase to trigger OOM errors.</td></tr>
+        <tr><td><code>cpuWorkMs</code></td><td>20</td><td><strong>CPU</strong></td><td>Milliseconds of real CPU work per cycle using hash_pbkdf2(). Higher = more CPU per cycle.</td></tr>
         <tr><td><code>softLimit</code></td><td>20</td><td><strong>Concurrency</strong></td><td>Concurrent requests before degradation. Lower = faster degradation.</td></tr>
-        <tr><td><code>degradationFactor</code></td><td>1000</td><td><strong>Concurrency</strong></td><td>Additional delay (ms) per request over softLimit.</td></tr>
+        <tr><td><code>degradationFactor</code></td><td>1.2</td><td><strong>Concurrency</strong></td><td>Multiplier per concurrent request over softLimit. Duration grows exponentially.</td></tr>
       </table>
 
       <h3>Tuning Parameters for Different Scenarios</h3>
@@ -945,12 +949,12 @@ https://your-app.azurewebsites.net/api/loadtest?cpuWorkMs=0&amp;memorySizeKb=100
         <strong>Note:</strong> Actual response times will vary based on your Azure App Service tier, PHP-FPM pool size (pm.max_children), and other factors. Use Azure Load Testing to establish baseline performance for your specific environment. These example scenarios, and the defaults, are for a Premium0V3 worker. Any other SKU or worker size will need individual tuning.
       </div>
       <table class="comparison-table">
-        <tr><th>Scenario</th><th>cpuWorkMs</th><th>memorySizeKb</th><th>baselineDelayMs</th><th>softLimit</th><th>degradationFactor</th><th>Primary Stress</th></tr>
-        <tr><td>Worker pool only</td><td>0</td><td>1000</td><td>1000</td><td>20</td><td>1000</td><td>FPM pool exhaustion, minimal CPU</td></tr>
-        <tr><td>CPU intensive</td><td>500</td><td>5000</td><td>0</td><td>400</td><td>50</td><td>High CPU, minimal blocking</td></tr>
-        <tr><td>Memory pressure</td><td>10</td><td>50000</td><td>200</td><td>80</td><td>250</td><td>High memory allocation (50MB/request)</td></tr>
-        <tr><td>Balanced (default)</td><td>100</td><td>10000</td><td>1000</td><td>20</td><td>1000</td><td>Balanced resource consumption</td></tr>
-        <tr><td>High concurrency</td><td>50</td><td>5000</td><td>400</td><td>200</td><td>100</td><td>Gradual degradation under high load</td></tr>
+        <tr><th>Scenario</th><th>targetDurationMs</th><th>memorySizeKb</th><th>cpuWorkMs</th><th>softLimit</th><th>degradationFactor</th><th>Primary Stress</th></tr>
+        <tr><td>Worker pool only</td><td>2000</td><td>1000</td><td>5</td><td>5</td><td>1.5</td><td>FPM pool exhaustion, minimal CPU</td></tr>
+        <tr><td>CPU intensive</td><td>500</td><td>2000</td><td>100</td><td>50</td><td>1.1</td><td>High CPU, minimal blocking</td></tr>
+        <tr><td>Memory pressure</td><td>1000</td><td>50000</td><td>5</td><td>20</td><td>1.2</td><td>High memory allocation (50MB/request)</td></tr>
+        <tr><td>Balanced (default)</td><td>1000</td><td>5000</td><td>20</td><td>20</td><td>1.2</td><td>Balanced resource consumption</td></tr>
+        <tr><td>High concurrency</td><td>500</td><td>2000</td><td>10</td><td>100</td><td>1.05</td><td>Gradual degradation under high load</td></tr>
       </table>
     </section>
 

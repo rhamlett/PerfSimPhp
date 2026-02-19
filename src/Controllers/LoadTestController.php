@@ -5,26 +5,14 @@
  * =============================================================================
  *
  * ENDPOINTS:
- *   GET /api/loadtest       → Execute load test work (all params optional query params)
+ *   GET /api/loadtest       → Execute load test work (all params optional)
  *   GET /api/loadtest/stats → Current statistics without performing work
  *
- * Designed for Azure Load Testing, JMeter, k6, Gatling. Does NOT appear
- * in the dashboard UI — it's meant for automated load testing tools.
+ * Designed for Azure Load Testing, JMeter, k6, Gatling.
  *
- * WORK TYPES (all create real, observable metrics):
- *   - CPU Work      : Cryptographic hashing (visible in CPU metrics)
- *   - File I/O      : Write/read temp files (visible in I/O metrics)
- *   - Memory Churn  : Allocate/serialize/free (visible in memory metrics)
- *   - JSON Process  : Deep encode/decode (visible in CPU + memory)
- *
- * SAFEGUARDS (prevent app lockup):
- *   - MAX_DURATION_MS = 60000     : No request can run longer than 60 seconds
- *   - MAX_DEGRADATION_MULTIPLIER = 30 : Caps exponential degradation
- *
- * DEGRADATION BEHAVIOR:
- *   Below soft limit: ~targetDurationMs response time
- *   Above soft limit: targetDurationMs * min(degradationFactor^overLimit, 30)
- *   Duration is capped at 60 seconds maximum regardless of degradation.
+ * SAFEGUARDS:
+ *   - Max duration: 60 seconds per request
+ *   - Max degradation multiplier: 30x
  *
  * @module src/Controllers/LoadTestController.php
  */
@@ -41,32 +29,24 @@ class LoadTestController
      * GET /api/loadtest
      * Executes a load test request with configurable resource consumption.
      *
-     * QUERY PARAMETERS (all optional):
-     *   - cpuWorkMs (int)         : Ms of CPU work per cycle (default: 20)
-     *   - memorySizeKb (int)      : KB of persistent memory (default: 5000 = 5MB)
-     *   - fileIoKb (int)          : KB to write/read per cycle (default: 20)
-     *   - jsonDepth (int)         : Nesting depth for JSON work (default: 3)
-     *   - memoryChurnKb (int)     : KB to churn per cycle (default: 100)
-     *   - targetDurationMs (int)  : Target request duration (default: 1000)
-     *   - baselineDelayMs (int)   : DEPRECATED alias for targetDurationMs
-     *   - softLimit (int)         : Concurrent before degradation (default: 20)
-     *   - degradationFactor (float): Multiplier per concurrent over limit (default: 1.2)
+     * QUERY PARAMETERS (all optional, 5 total):
+     *   - targetDurationMs (int)    : Base request duration in ms (default: 1000)
+     *   - memorySizeKb (int)        : Memory to allocate in KB (default: 5000)
+     *   - cpuWorkMs (int)           : CPU work per cycle in ms (default: 20)
+     *   - softLimit (int)           : Concurrent requests before degradation (default: 20)
+     *   - degradationFactor (float) : Multiplier per concurrent over limit (default: 1.2)
      *
      * EXAMPLES:
-     *   GET /api/loadtest?cpuWorkMs=50&fileIoKb=50
-     *   GET /api/loadtest?targetDurationMs=2000&softLimit=10
+     *   GET /api/loadtest
+     *   GET /api/loadtest?targetDurationMs=500&cpuWorkMs=50
+     *   GET /api/loadtest?softLimit=10&degradationFactor=1.5
      */
     public static function execute(): void
     {
-        // Parse optional query parameters (integers)
-        // Includes backwards-compatible old param names
         $request = [];
-        $intParams = [
-            'cpuWorkMs', 'memorySizeKb', 'fileIoKb', 'jsonDepth', 'memoryChurnKb', 
-            'targetDurationMs', 'softLimit',
-            'baselineDelayMs',  // OLD: maps to targetDurationMs in service
-        ];
-
+        
+        // Parse the 5 tunable parameters
+        $intParams = ['targetDurationMs', 'memorySizeKb', 'cpuWorkMs', 'softLimit', 'baselineDelayMs'];
         foreach ($intParams as $param) {
             if (isset($_GET[$param]) && is_numeric($_GET[$param])) {
                 $request[$param] = (int) $_GET[$param];
@@ -82,14 +62,11 @@ class LoadTestController
             $result = LoadTestService::executeWork($request);
             echo json_encode($result);
         } catch (\Throwable $e) {
-            // Log full details and show actual error for debugging
-            error_log("[LoadTestController] " . get_class($e) . ": " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+            error_log("[LoadTestController] " . get_class($e) . ": " . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'error' => get_class($e),
                 'message' => $e->getMessage(),
-                'file' => basename($e->getFile()),
-                'line' => $e->getLine(),
             ]);
         }
     }
