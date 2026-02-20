@@ -358,89 +358,36 @@ function pollEventsOnce() {
 // Latency Probe Polling
 // ============================================================================
 
-// Timer for frontend probes (1s interval)
-let frontendProbePollTimer = null;
-// Flag to prevent overlapping internal probes
-let internalProbeInFlight = false;
+// Flag to prevent overlapping probes
+let probeInFlight = false;
 
 /**
- * Starts probe polling with two separate intervals:
- * - Internal probes to localhost:8080 every 100ms (bypasses stamp frontend)
- * - Frontend probes through AppLens every 1000ms (visible in AppLens)
+ * Starts probe polling every 100ms via direct frontend requests.
+ * Measures full round-trip latency including Azure Front Door and stamp frontend.
+ * Uses a flag to prevent pile-up if requests take longer than 100ms.
  */
 function startProbePolling() {
   if (probePollTimer) clearInterval(probePollTimer);
-  if (frontendProbePollTimer) clearInterval(frontendProbePollTimer);
 
-  console.log('[polling-client] Starting probe polling (internal: 100ms, frontend: 1000ms)');
+  console.log('[polling-client] Starting probe polling (100ms interval)');
   
-  // Internal probes every 100ms - measures PHP-FPM latency via localhost
-  // Uses a flag to prevent pile-up if requests take longer than 100ms
-  internalProbeInFlight = false;
-  internalProbeOnce();
-  probePollTimer = setInterval(internalProbeOnce, INTERNAL_PROBE_INTERVAL);
-  
-  // Frontend probes every 1s - measures full round-trip through AppLens
-  frontendProbeOnce();
-  frontendProbePollTimer = setInterval(frontendProbeOnce, 1000);
+  probeInFlight = false;
+  probeOnce();
+  probePollTimer = setInterval(probeOnce, INTERNAL_PROBE_INTERVAL);
 }
 
 /**
- * Performs a single internal probe via the metrics pool.
- * The server does one curl to localhost:8080/api/metrics/probe,
- * measuring real PHP-FPM worker acquisition and processing time.
- * 
+ * Performs a single probe through the stamp frontend.
+ * Measures full round-trip latency including Azure Front Door and stamp frontend.
  * Skips if a previous probe is still in flight to prevent pile-up.
  */
-function internalProbeOnce() {
+function probeOnce() {
   // Skip if previous request hasn't completed
-  if (internalProbeInFlight) {
+  if (probeInFlight) {
     return;
   }
-  internalProbeInFlight = true;
+  probeInFlight = true;
   
-  const probeUrl = '/api/metrics/internal-probe?t=' + Date.now();
-
-  fetchWithTimeout(probeUrl, { 
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-  }, PROBE_TIMEOUT_MS)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('HTTP ' + response.status);
-      }
-      return response.json();
-    })
-    .then(data => {
-      onPollSuccess();
-
-      if (typeof onProbeLatency === 'function') {
-        onProbeLatency({
-          latencyMs: data.latencyMs,
-          timestamp: data.timestamp,
-          success: data.success,
-          loadTestActive: data.loadTestActive || false,
-          loadTestConcurrent: data.loadTestConcurrent || 0,
-        });
-      }
-
-      if (!data.success && data._debug) {
-        console.warn('[polling-client] Internal probe failed:', data._debug);
-      }
-    })
-    .catch(error => {
-      console.error('[polling-client] Internal probe failed:', error.message || error);
-    })
-    .finally(() => {
-      internalProbeInFlight = false;
-    });
-}
-
-/**
- * Performs a single probe through the stamp frontend (visible in AppLens).
- * Measures full round-trip latency including Azure Front Door and stamp frontend.
- */
-function frontendProbeOnce() {
   const probeStart = Date.now();
   const probeUrl = '/api/metrics/probe?t=' + probeStart;
 
@@ -456,6 +403,8 @@ function frontendProbeOnce() {
       return response.json().then(data => ({ data, latency }));
     })
     .then(({ data, latency }) => {
+      onPollSuccess();
+
       if (typeof onProbeLatency === 'function') {
         onProbeLatency({
           latencyMs: latency,
@@ -467,7 +416,7 @@ function frontendProbeOnce() {
       }
     })
     .catch(error => {
-      console.error('[polling-client] Frontend probe failed:', error.message || error);
+      console.error('[polling-client] Probe failed:', error.message || error);
       if (typeof onProbeLatency === 'function') {
         onProbeLatency({
           latencyMs: 0,
@@ -477,6 +426,9 @@ function frontendProbeOnce() {
           loadTestConcurrent: 0,
         });
       }
+    })
+    .finally(() => {
+      probeInFlight = false;
     });
 }
 
@@ -491,7 +443,6 @@ function stopAllPolling() {
   if (metricsPollTimer) { clearInterval(metricsPollTimer); metricsPollTimer = null; }
   if (eventsPollTimer) { clearInterval(eventsPollTimer); eventsPollTimer = null; }
   if (probePollTimer) { clearInterval(probePollTimer); probePollTimer = null; }
-  if (frontendProbePollTimer) { clearInterval(frontendProbePollTimer); frontendProbePollTimer = null; }
 }
 
 /**
