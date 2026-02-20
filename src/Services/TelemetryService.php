@@ -1,12 +1,13 @@
 <?php
 /**
  * =============================================================================
- * TELEMETRY SERVICE — Application Insights Integration via OpenTelemetry
+ * TELEMETRY SERVICE — Application Insights Integration (Direct HTTP)
  * =============================================================================
  *
  * PURPOSE:
  *   Provides Application Insights telemetry for PHP applications using
- *   OpenTelemetry SDK. Gracefully handles missing configuration.
+ *   direct HTTP calls to the Track API. Zero external dependencies.
+ *   Gracefully handles missing configuration.
  *
  * CONFIGURATION:
  *   Set these App Settings in Azure Portal (or environment variables locally):
@@ -15,7 +16,8 @@
  *
  * USAGE:
  *   TelemetryService::init();           // Call once at startup
- *   TelemetryService::trackRequest(...) // Track HTTP requests
+ *   TelemetryService::startRequest(...) // Start tracking HTTP request
+ *   TelemetryService::endRequest(...)   // End request tracking
  *   TelemetryService::trackException()  // Track exceptions
  *   TelemetryService::flush();          // Flush before shutdown
  *
@@ -26,33 +28,23 @@ declare(strict_types=1);
 
 namespace PerfSimPhp\Services;
 
-use OpenTelemetry\API\Globals;
-use OpenTelemetry\API\Trace\SpanKind;
-use OpenTelemetry\API\Trace\StatusCode;
-use OpenTelemetry\API\Trace\TracerInterface;
-use OpenTelemetry\Context\ScopeInterface;
-use OpenTelemetry\SDK\Trace\TracerProvider;
-use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
-use OpenTelemetry\SDK\Resource\ResourceInfo;
-use OpenTelemetry\SDK\Resource\ResourceInfoFactory;
-use OpenTelemetry\SDK\Common\Attribute\Attributes;
-use OpenTelemetry\SemConv\ResourceAttributes;
-use OpenTelemetry\SemConv\TraceAttributes;
-use Azure\Monitor\OpenTelemetry\Exporter\AzureMonitorTraceExporter;
-
 class TelemetryService
 {
     private static bool $initialized = false;
     private static bool $enabled = false;
-    private static ?TracerInterface $tracer = null;
-    private static ?TracerProvider $tracerProvider = null;
-    private static mixed $currentSpan = null;
-    private static ?ScopeInterface $currentScope = null;
+    private static string $instrumentationKey = '';
+    private static string $ingestionEndpoint = '';
+    private static string $serviceName = '';
+    private static array $pendingTelemetry = [];
+    
+    // Current request tracking
     private static float $requestStartTime = 0;
+    private static string $requestMethod = '';
+    private static string $requestUri = '';
+    private static string $operationId = '';
 
     /**
      * Environment variable for Application Insights connection string.
-     * This is the standard Azure variable name.
      */
     private const CONNECTION_STRING_VAR = 'APPLICATIONINSIGHTS_CONNECTION_STRING';
     
@@ -67,11 +59,13 @@ class TelemetryService
     private const DEFAULT_SERVICE_NAME = 'PerfSimPhp';
 
     /**
+     * Application Insights SDK version to report.
+     */
+    private const SDK_VERSION = 'php:1.0.0';
+
+    /**
      * Initialize the telemetry service.
-     * Must be called once at application startup.
-     * 
-     * Safe to call even if App Insights is not configured - will gracefully
-     * disable telemetry and log an info message.
+     * Safe to call even if App Insights is not configured.
      */
     public static function init(): void
     {
@@ -79,13 +73,6 @@ class TelemetryService
             return;
         }
         self::$initialized = true;
-
-        // Check if OpenTelemetry packages are installed
-        if (!class_exists('OpenTelemetry\SDK\Trace\TracerProvider')) {
-            self::$enabled = false;
-            // Don't log anything - packages not installed is a normal state
-            return;
-        }
 
         // Get connection string from environment
         $connectionString = self::getEnvVar(self::CONNECTION_STRING_VAR);
@@ -100,34 +87,24 @@ class TelemetryService
         }
 
         try {
-            // Get service name
-            $serviceName = self::getEnvVar(self::SERVICE_NAME_VAR) ?: self::DEFAULT_SERVICE_NAME;
+            // Parse connection string
+            $config = self::parseConnectionString($connectionString);
+            
+            if (empty($config['InstrumentationKey'])) {
+                throw new \RuntimeException('InstrumentationKey not found in connection string');
+            }
+            if (empty($config['IngestionEndpoint'])) {
+                throw new \RuntimeException('IngestionEndpoint not found in connection string');
+            }
 
-            // Create resource with service info
-            $resource = ResourceInfoFactory::defaultResource()->merge(
-                ResourceInfo::create(Attributes::create([
-                    ResourceAttributes::SERVICE_NAME => $serviceName,
-                    ResourceAttributes::SERVICE_VERSION => '1.0.0',
-                    ResourceAttributes::DEPLOYMENT_ENVIRONMENT => self::getEnvVar('WEBSITE_SITE_NAME') ? 'azure' : 'local',
-                ]))
-            );
-
-            // Create Azure Monitor exporter
-            $exporter = new AzureMonitorTraceExporter($connectionString);
-
-            // Create tracer provider with exporter
-            self::$tracerProvider = TracerProvider::builder()
-                ->addSpanProcessor(new SimpleSpanProcessor($exporter))
-                ->setResource($resource)
-                ->build();
-
-            // Get tracer instance
-            self::$tracer = self::$tracerProvider->getTracer($serviceName, '1.0.0');
+            self::$instrumentationKey = $config['InstrumentationKey'];
+            self::$ingestionEndpoint = rtrim($config['IngestionEndpoint'], '/') . '/v2/track';
+            self::$serviceName = self::getEnvVar(self::SERVICE_NAME_VAR) ?: self::DEFAULT_SERVICE_NAME;
             
             self::$enabled = true;
             EventLogService::info(
                 'TELEMETRY',
-                'Application Insights enabled for service: ' . $serviceName
+                'Application Insights enabled for service: ' . self::$serviceName
             );
         } catch (\Throwable $e) {
             self::$enabled = false;
@@ -136,6 +113,21 @@ class TelemetryService
                 'Failed to initialize Application Insights: ' . $e->getMessage()
             );
         }
+    }
+
+    /**
+     * Parse Application Insights connection string into components.
+     */
+    private static function parseConnectionString(string $connectionString): array
+    {
+        $parts = [];
+        foreach (explode(';', $connectionString) as $pair) {
+            if (strpos($pair, '=') !== false) {
+                [$key, $value] = explode('=', $pair, 2);
+                $parts[trim($key)] = trim($value);
+            }
+        }
+        return $parts;
     }
 
     /**
@@ -148,154 +140,133 @@ class TelemetryService
 
     /**
      * Start tracking an HTTP request.
-     * Call this at the beginning of request handling.
-     *
-     * @param string $method HTTP method (GET, POST, etc.)
-     * @param string $uri Request URI
-     * @param array $attributes Additional span attributes
      */
     public static function startRequest(string $method, string $uri, array $attributes = []): void
     {
         self::$requestStartTime = microtime(true);
-        
-        if (!self::$enabled || self::$tracer === null) {
-            return;
-        }
-
-        try {
-            $spanBuilder = self::$tracer->spanBuilder("$method $uri")
-                ->setSpanKind(SpanKind::KIND_SERVER)
-                ->setAttribute(TraceAttributes::HTTP_REQUEST_METHOD, $method)
-                ->setAttribute(TraceAttributes::URL_PATH, $uri)
-                ->setAttribute(TraceAttributes::SERVER_ADDRESS, $_SERVER['SERVER_NAME'] ?? 'localhost');
-
-            // Add custom attributes
-            foreach ($attributes as $key => $value) {
-                $spanBuilder->setAttribute($key, $value);
-            }
-
-            self::$currentSpan = $spanBuilder->startSpan();
-            self::$currentScope = self::$currentSpan->activate();
-        } catch (\Throwable $e) {
-            // Silently ignore telemetry errors
-        }
+        self::$requestMethod = $method;
+        self::$requestUri = $uri;
+        self::$operationId = self::generateOperationId();
     }
 
     /**
-     * End tracking the current request.
-     * Call this at the end of request handling.
-     *
-     * @param int $statusCode HTTP response status code
-     * @param bool $success Whether the request was successful
+     * End tracking the current request and queue telemetry.
      */
     public static function endRequest(int $statusCode, bool $success = true): void
     {
-        if (!self::$enabled || self::$currentSpan === null) {
+        if (!self::$enabled || self::$requestStartTime === 0.0) {
             return;
         }
 
-        try {
-            $duration = (microtime(true) - self::$requestStartTime) * 1000;
+        $duration = microtime(true) - self::$requestStartTime;
 
-            self::$currentSpan->setAttribute(TraceAttributes::HTTP_RESPONSE_STATUS_CODE, $statusCode);
-            self::$currentSpan->setAttribute('http.duration_ms', $duration);
-            
-            if (!$success || $statusCode >= 400) {
-                self::$currentSpan->setStatus(StatusCode::STATUS_ERROR);
-            } else {
-                self::$currentSpan->setStatus(StatusCode::STATUS_OK);
-            }
+        // Format duration in ISO 8601 format (d.hh:mm:ss.fffffff)
+        $durationFormatted = self::formatDuration($duration);
 
-            if (self::$currentScope !== null) {
-                self::$currentScope->detach();
-                self::$currentScope = null;
-            }
-            
-            self::$currentSpan->end();
-            self::$currentSpan = null;
-        } catch (\Throwable $e) {
-            // Silently ignore telemetry errors
-        }
+        $telemetry = [
+            'name' => 'Microsoft.ApplicationInsights.' . str_replace('-', '', self::$instrumentationKey) . '.Request',
+            'time' => gmdate('Y-m-d\TH:i:s.v\Z'),
+            'iKey' => self::$instrumentationKey,
+            'tags' => [
+                'ai.operation.id' => self::$operationId,
+                'ai.operation.name' => self::$requestMethod . ' ' . self::$requestUri,
+                'ai.cloud.role' => self::$serviceName,
+                'ai.cloud.roleInstance' => gethostname() ?: 'unknown',
+                'ai.internal.sdkVersion' => self::SDK_VERSION,
+            ],
+            'data' => [
+                'baseType' => 'RequestData',
+                'baseData' => [
+                    'ver' => 2,
+                    'id' => self::$operationId,
+                    'name' => self::$requestMethod . ' ' . self::$requestUri,
+                    'duration' => $durationFormatted,
+                    'responseCode' => (string)$statusCode,
+                    'success' => $statusCode < 400,
+                    'url' => self::getFullUrl(),
+                ],
+            ],
+        ];
+
+        self::$pendingTelemetry[] = $telemetry;
+        
+        // Reset for next request
+        self::$requestStartTime = 0;
     }
 
     /**
      * Track an exception.
-     *
-     * @param \Throwable $exception The exception to track
-     * @param array $attributes Additional attributes
      */
     public static function trackException(\Throwable $exception, array $attributes = []): void
     {
-        if (!self::$enabled || self::$tracer === null) {
+        if (!self::$enabled) {
             return;
         }
 
-        try {
-            // If there's an active span, record the exception there
-            if (self::$currentSpan !== null) {
-                self::$currentSpan->recordException($exception, [
-                    'exception.type' => get_class($exception),
-                    'exception.message' => $exception->getMessage(),
-                    'exception.stacktrace' => $exception->getTraceAsString(),
-                    ...$attributes,
-                ]);
-                self::$currentSpan->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
-            } else {
-                // Create a standalone exception span
-                $span = self::$tracer->spanBuilder('Exception: ' . get_class($exception))
-                    ->setSpanKind(SpanKind::KIND_INTERNAL)
-                    ->startSpan();
-                
-                $span->recordException($exception, [
-                    'exception.type' => get_class($exception),
-                    'exception.message' => $exception->getMessage(),
-                    'exception.stacktrace' => $exception->getTraceAsString(),
-                    ...$attributes,
-                ]);
-                $span->setStatus(StatusCode::STATUS_ERROR, $exception->getMessage());
-                $span->end();
-            }
-        } catch (\Throwable $e) {
-            // Silently ignore telemetry errors
-        }
+        $telemetry = [
+            'name' => 'Microsoft.ApplicationInsights.' . str_replace('-', '', self::$instrumentationKey) . '.Exception',
+            'time' => gmdate('Y-m-d\TH:i:s.v\Z'),
+            'iKey' => self::$instrumentationKey,
+            'tags' => [
+                'ai.operation.id' => self::$operationId ?: self::generateOperationId(),
+                'ai.cloud.role' => self::$serviceName,
+                'ai.cloud.roleInstance' => gethostname() ?: 'unknown',
+                'ai.internal.sdkVersion' => self::SDK_VERSION,
+            ],
+            'data' => [
+                'baseType' => 'ExceptionData',
+                'baseData' => [
+                    'ver' => 2,
+                    'exceptions' => [
+                        [
+                            'typeName' => get_class($exception),
+                            'message' => $exception->getMessage(),
+                            'hasFullStack' => true,
+                            'stack' => $exception->getTraceAsString(),
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        self::$pendingTelemetry[] = $telemetry;
     }
 
     /**
      * Track a custom event.
-     *
-     * @param string $name Event name
-     * @param array $attributes Event attributes/properties
      */
-    public static function trackEvent(string $name, array $attributes = []): void
+    public static function trackEvent(string $name, array $properties = [], array $measurements = []): void
     {
-        if (!self::$enabled || self::$tracer === null) {
+        if (!self::$enabled) {
             return;
         }
 
-        try {
-            $span = self::$tracer->spanBuilder($name)
-                ->setSpanKind(SpanKind::KIND_INTERNAL)
-                ->startSpan();
+        $telemetry = [
+            'name' => 'Microsoft.ApplicationInsights.' . str_replace('-', '', self::$instrumentationKey) . '.Event',
+            'time' => gmdate('Y-m-d\TH:i:s.v\Z'),
+            'iKey' => self::$instrumentationKey,
+            'tags' => [
+                'ai.operation.id' => self::$operationId ?: self::generateOperationId(),
+                'ai.cloud.role' => self::$serviceName,
+                'ai.cloud.roleInstance' => gethostname() ?: 'unknown',
+                'ai.internal.sdkVersion' => self::SDK_VERSION,
+            ],
+            'data' => [
+                'baseType' => 'EventData',
+                'baseData' => [
+                    'ver' => 2,
+                    'name' => $name,
+                    'properties' => $properties ?: null,
+                    'measurements' => $measurements ?: null,
+                ],
+            ],
+        ];
 
-            foreach ($attributes as $key => $value) {
-                $span->setAttribute($key, $value);
-            }
-
-            $span->end();
-        } catch (\Throwable $e) {
-            // Silently ignore telemetry errors
-        }
+        self::$pendingTelemetry[] = $telemetry;
     }
 
     /**
      * Track a dependency call (external service, database, etc.).
-     *
-     * @param string $type Dependency type (HTTP, SQL, etc.)
-     * @param string $target Target URI or connection string
-     * @param string $name Operation name
-     * @param float $durationMs Duration in milliseconds
-     * @param bool $success Whether the call succeeded
-     * @param array $attributes Additional attributes
      */
     public static function trackDependency(
         string $type,
@@ -303,104 +274,82 @@ class TelemetryService
         string $name,
         float $durationMs,
         bool $success = true,
-        array $attributes = []
+        array $properties = []
     ): void {
-        if (!self::$enabled || self::$tracer === null) {
+        if (!self::$enabled) {
             return;
         }
 
-        try {
-            $span = self::$tracer->spanBuilder($name)
-                ->setSpanKind(SpanKind::KIND_CLIENT)
-                ->setAttribute('dependency.type', $type)
-                ->setAttribute('dependency.target', $target)
-                ->setAttribute('dependency.duration_ms', $durationMs)
-                ->setAttribute('dependency.success', $success)
-                ->startSpan();
+        $telemetry = [
+            'name' => 'Microsoft.ApplicationInsights.' . str_replace('-', '', self::$instrumentationKey) . '.RemoteDependency',
+            'time' => gmdate('Y-m-d\TH:i:s.v\Z'),
+            'iKey' => self::$instrumentationKey,
+            'tags' => [
+                'ai.operation.id' => self::$operationId ?: self::generateOperationId(),
+                'ai.cloud.role' => self::$serviceName,
+                'ai.cloud.roleInstance' => gethostname() ?: 'unknown',
+                'ai.internal.sdkVersion' => self::SDK_VERSION,
+            ],
+            'data' => [
+                'baseType' => 'RemoteDependencyData',
+                'baseData' => [
+                    'ver' => 2,
+                    'name' => $name,
+                    'type' => $type,
+                    'target' => $target,
+                    'duration' => self::formatDuration($durationMs / 1000),
+                    'success' => $success,
+                    'properties' => $properties ?: null,
+                ],
+            ],
+        ];
 
-            foreach ($attributes as $key => $value) {
-                $span->setAttribute($key, $value);
-            }
-
-            $span->setStatus($success ? StatusCode::STATUS_OK : StatusCode::STATUS_ERROR);
-            $span->end();
-        } catch (\Throwable $e) {
-            // Silently ignore telemetry errors
-        }
+        self::$pendingTelemetry[] = $telemetry;
     }
 
     /**
-     * Flush pending telemetry data.
-     * Call this before application shutdown.
+     * Flush pending telemetry to Application Insights.
      */
     public static function flush(): void
     {
-        if (!self::$enabled || self::$tracerProvider === null) {
+        if (!self::$enabled || empty(self::$pendingTelemetry)) {
             return;
         }
 
         try {
-            // End any active span
-            if (self::$currentSpan !== null) {
-                if (self::$currentScope !== null) {
-                    self::$currentScope->detach();
-                    self::$currentScope = null;
-                }
-                self::$currentSpan->end();
-                self::$currentSpan = null;
-            }
+            $payload = implode("\n", array_map('json_encode', self::$pendingTelemetry));
+            
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'POST',
+                    'header' => [
+                        'Content-Type: application/x-json-stream',
+                        'Accept: application/json',
+                    ],
+                    'content' => $payload,
+                    'timeout' => 2, // Short timeout to not block requests
+                    'ignore_errors' => true,
+                ],
+            ]);
 
-            // Force flush the tracer provider
-            self::$tracerProvider->forceFlush();
+            // Fire and forget - don't wait for response
+            @file_get_contents(self::$ingestionEndpoint, false, $context);
+            
+            self::$pendingTelemetry = [];
         } catch (\Throwable $e) {
             // Silently ignore telemetry errors
+            self::$pendingTelemetry = [];
         }
     }
 
     /**
      * Shutdown the telemetry service.
-     * Call this at application termination.
      */
     public static function shutdown(): void
     {
         self::flush();
-        
-        if (self::$tracerProvider !== null) {
-            try {
-                self::$tracerProvider->shutdown();
-            } catch (\Throwable $e) {
-                // Silently ignore
-            }
-            self::$tracerProvider = null;
-        }
-        
-        self::$tracer = null;
         self::$enabled = false;
         self::$initialized = false;
-    }
-
-    /**
-     * Get an environment variable, checking both getenv() and $_SERVER.
-     */
-    private static function getEnvVar(string $name): ?string
-    {
-        // Check getenv first
-        $value = getenv($name);
-        if ($value !== false && $value !== '') {
-            return $value;
-        }
-
-        // Check $_SERVER (common in FPM)
-        if (isset($_SERVER[$name]) && $_SERVER[$name] !== '') {
-            return $_SERVER[$name];
-        }
-
-        // Check $_ENV
-        if (isset($_ENV[$name]) && $_ENV[$name] !== '') {
-            return $_ENV[$name];
-        }
-
-        return null;
     }
 
     /**
@@ -411,9 +360,70 @@ class TelemetryService
         return [
             'initialized' => self::$initialized,
             'enabled' => self::$enabled,
-            'packagesInstalled' => class_exists('OpenTelemetry\SDK\Trace\TracerProvider'),
             'connectionStringConfigured' => !empty(self::getEnvVar(self::CONNECTION_STRING_VAR)),
-            'serviceName' => self::getEnvVar(self::SERVICE_NAME_VAR) ?: self::DEFAULT_SERVICE_NAME,
+            'serviceName' => self::$serviceName ?: self::DEFAULT_SERVICE_NAME,
+            'pendingItems' => count(self::$pendingTelemetry),
         ];
+    }
+
+    /**
+     * Get an environment variable.
+     */
+    private static function getEnvVar(string $name): ?string
+    {
+        $value = getenv($name);
+        if ($value !== false && $value !== '') {
+            return $value;
+        }
+        if (isset($_SERVER[$name]) && $_SERVER[$name] !== '') {
+            return $_SERVER[$name];
+        }
+        if (isset($_ENV[$name]) && $_ENV[$name] !== '') {
+            return $_ENV[$name];
+        }
+        return null;
+    }
+
+    /**
+     * Generate a unique operation ID.
+     */
+    private static function generateOperationId(): string
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    /**
+     * Format duration in ISO 8601 format for Application Insights.
+     */
+    private static function formatDuration(float $seconds): string
+    {
+        $days = floor($seconds / 86400);
+        $seconds = $seconds % 86400;
+        $hours = floor($seconds / 3600);
+        $seconds = $seconds % 3600;
+        $minutes = floor($seconds / 60);
+        $seconds = $seconds % 60;
+        $wholeSecs = floor($seconds);
+        $microsecs = round(($seconds - $wholeSecs) * 10000000);
+
+        return sprintf(
+            '%d.%02d:%02d:%02d.%07d',
+            $days,
+            $hours,
+            $minutes,
+            $wholeSecs,
+            $microsecs
+        );
+    }
+
+    /**
+     * Get full URL for the current request.
+     */
+    private static function getFullUrl(): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        $uri = $_SERVER['REQUEST_URI'] ?? self::$requestUri;
+        return $scheme . '://' . $host . $uri;
     }
 }
