@@ -67,7 +67,7 @@ let lastEventSequence = 0;  // Monotonic sequence for reliable change detection
 
 // Track consecutive failures for connection status
 let consecutiveFailures = 0;
-const MAX_CONSECUTIVE_FAILURES = 3;
+const MAX_CONSECUTIVE_FAILURES = 10;
 
 /**
  * Fetch with timeout using AbortController.
@@ -133,7 +133,7 @@ function onConnected() {
   // Add initialization events to the log
   if (typeof addEventToLog === 'function') {
     addEventToLog({ level: 'info', message: 'Dashboard initialized' });
-    addEventToLog({ level: 'success', message: 'Connected to metrics hub' });
+    addEventToLog({ level: 'success', message: 'Server responding' });
   }
 
   // Notify dashboard of connection
@@ -179,12 +179,12 @@ function onPollFailure() {
     isConnected = false;
     const statusEl = document.getElementById('connection-status');
     if (statusEl) {
-      statusEl.textContent = 'Disconnected';
+      statusEl.textContent = 'Not Responding';
       statusEl.className = 'status-disconnected';
     }
 
     if (typeof addEventToLog === 'function') {
-      addEventToLog({ level: 'warning', message: 'Connection lost. Attempting to reconnect...' });
+      addEventToLog({ level: 'warning', message: 'Server not responding...' });
     }
 
     // Stop polling and attempt reconnection
@@ -208,7 +208,7 @@ function onPollSuccess() {
         statusEl.className = 'status-connected';
       }
       if (typeof addEventToLog === 'function') {
-        addEventToLog({ level: 'success', message: 'Reconnected to server' });
+        addEventToLog({ level: 'success', message: 'Server responding' });
       }
     }
   }
