@@ -19,6 +19,29 @@ An educational tool designed to help Azure support engineers practice diagnosing
 
 The application runs on **PHP 8.4** with **Nginx + PHP-FPM**, using APCu or file-based shared storage for cross-request state, and AJAX polling for real-time metrics.
 
+### Dual FPM Pool Architecture
+
+To keep the dashboard responsive during load testing, the application uses **two separate PHP-FPM pools**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Nginx (routing by URL)                                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  /api/loadtest/*        ───►  Port 9000 (main pool, ~8 workers) │
+│  /api/simulations/*     ───►       Load test & simulations      │
+│  Other PHP requests     ───►                                    │
+│                                                                 │
+│  /api/metrics/*         ───►  Port 9001 (metrics pool, 2 workers)│
+│  /api/health/*          ───►       Dashboard polling (reserved) │
+│  /api/admin/events      ───►                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+This prevents load test traffic from starving the dashboard — metrics workers are always available.
+
+### Directory Structure
+
 ```
 public/
 ├── index.php               # Front controller (all requests)
@@ -44,6 +67,11 @@ src/
 
 workers/
 └── cpu-worker.php          # Background CPU stress process
+
+# Configuration (Azure App Service)
+├── default                 # Nginx config (dual FPM pool routing)
+├── metrics-pool.conf       # Dedicated FPM pool for metrics (port 9001)
+└── startup.sh              # Azure startup script (installs configs)
 ```
 
 ## 🚀 Quick Start
@@ -168,22 +196,29 @@ PHP-FPM master automatically respawns crashed workers.
 Dedicated endpoint for Azure Load Testing:
 
 ```
-GET /api/loadtest?targetDurationMs=1000&memorySizeKb=5000&cpuWorkMs=20&softLimit=20&degradationFactor=1.2
+GET /api/loadtest
+GET /api/loadtest?workMs=100&memoryKb=5000
 GET /api/loadtest/stats
 ```
 
 **Query Parameters (all optional):**
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `targetDurationMs` | 1000 | Target request duration in ms (alias: `baselineDelayMs`) |
-| `memorySizeKb` | 5000 | KB of memory to allocate per request (increase to trigger OOM) |
-| `cpuWorkMs` | 20 | Milliseconds of CPU work per cycle (uses hash_pbkdf2) |
-| `softLimit` | 20 | Concurrent requests before degradation starts |
-| `degradationFactor` | 1.2 | Multiplier per concurrent request over softLimit |
+| Parameter | Default | Max | Description |
+|-----------|---------|-----|-------------|
+| `workMs` | 100 | 5000 | Duration of CPU work in milliseconds (uses hash_pbkdf2) |
+| `memoryKb` | 5000 | 50000 | Memory to allocate per request in KB |
 
-**Safeguards:** Max duration 60s, max degradation 30x (prevents runaway).
+**Design Philosophy:**
+- Each request does a SHORT burst of real work (~100ms)
+- Workers return quickly, keeping dashboard responsive
+- Load test frameworks hit the endpoint repeatedly for sustained load
+- Under heavy load, requests naturally queue (realistic degradation)
 
-**Degradation Formula:** `duration = targetDurationMs × min(degradationFactor^overLimit, 30)` capped at 60s
+**Stats Logging:** Every 60 seconds, a summary is logged to the event log:
+```
+📊 Load Test (60s): 1523 requests, 112ms avg, 426ms max, 25.4 RPS
+```
+
+**Legacy Parameters:** `targetDurationMs` and `memorySizeKb` are still supported as aliases for backwards compatibility.
 
 ## 🔬 Diagnostics
 

@@ -472,47 +472,56 @@ POST /api/simulations/memory/release</code></pre>
 
       <h3>Usage</h3>
       <p>Use the <code>GET /api/loadtest</code> endpoint directly in Azure Load Testing &mdash; no JMeter script required:</p>
-      <pre><code># With defaults
+      <pre><code># With defaults (100ms CPU work, 5MB memory)
 https://perfsimphp.azurewebsites.net/api/loadtest
 
-# All parameters (defaults shown)
-https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=5000&amp;cpuWorkMs=20&amp;softLimit=20&amp;degradationFactor=1.2
+# Custom CPU work duration
+https://perfsimphp.azurewebsites.net/api/loadtest?workMs=200
 
-# CPU intensive
-https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=500&amp;cpuWorkMs=100&amp;memorySizeKb=2000
+# Higher memory allocation
+https://perfsimphp.azurewebsites.net/api/loadtest?workMs=100&amp;memoryKb=10000
 
-# Memory pressure
-https://perfsimphp.azurewebsites.net/api/loadtest?targetDurationMs=1000&amp;memorySizeKb=50000&amp;cpuWorkMs=5</code></pre>
+# Maximum stress (5s work, 50MB memory)
+https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000</code></pre>
 
       <h3>Query Parameters</h3>
       <table>
-        <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
-        <tr><td><code>targetDurationMs</code></td><td>1000</td><td>Target request duration in ms (alias: baselineDelayMs)</td></tr>
-        <tr><td><code>memorySizeKb</code></td><td>5000</td><td>Memory buffer held for entire request duration (KB) - increase to stress/crash</td></tr>
-        <tr><td><code>cpuWorkMs</code></td><td>20</td><td>Milliseconds of CPU work per cycle (uses hash_pbkdf2)</td></tr>
-        <tr><td><code>softLimit</code></td><td>20</td><td>Concurrent requests before degradation begins</td></tr>
-        <tr><td><code>degradationFactor</code></td><td>1.2</td><td>Multiplier per concurrent request over soft limit</td></tr>
+        <tr><th>Parameter</th><th>Default</th><th>Max</th><th>Description</th></tr>
+        <tr><td><code>workMs</code></td><td>100</td><td>5000</td><td>Duration of CPU work in milliseconds (uses hash_pbkdf2)</td></tr>
+        <tr><td><code>memoryKb</code></td><td>5000</td><td>50000</td><td>Memory to allocate per request in KB</td></tr>
       </table>
 
       <div class="info-box">
-        <strong>Safeguards:</strong> Max duration 60 seconds, max degradation 30x (prevents runaway).
+        <strong>Legacy Parameters:</strong> <code>targetDurationMs</code> and <code>memorySizeKb</code> are still supported as aliases for backwards compatibility.
       </div>
 
-      <h3>Behavior (Sustained Resource Consumption)</h3>
+      <h3>Design Philosophy</h3>
       <ul>
-        <li><strong>Memory:</strong> Allocated up front and held for entire request duration (visible in Azure Memory metrics)</li>
-        <li><strong>CPU:</strong> Real work cycles using hash_pbkdf2, file I/O, memory churn, and JSON processing</li>
-        <li><strong>Degradation:</strong> duration = targetDurationMs &times; min(degradationFactor<sup>overLimit</sup>, 30) — capped at 60s</li>
-        <li><strong>After 120 seconds:</strong> 20% chance of throwing a random exception per check interval</li>
-        <li><strong>Safeguards:</strong> Built-in caps prevent runaway (60s max, 30x max multiplier)</li>
+        <li><strong>Short Bursts:</strong> Each request does ~100ms of real work, then returns</li>
+        <li><strong>Fast Turnover:</strong> Workers return quickly, preventing total pool exhaustion</li>
+        <li><strong>Natural Degradation:</strong> Under heavy load, requests queue up (realistic back-pressure)</li>
+        <li><strong>Dashboard Resilience:</strong> Metrics endpoints use a dedicated FPM pool (see below)</li>
       </ul>
+
+      <h3>Stats Logging</h3>
+      <p>Every 60 seconds during active load testing, a summary is logged to the event log:</p>
+      <pre><code>📊 Load Test (60s): 1523 requests, 112ms avg, 426ms max, 25.4 RPS</code></pre>
+
+      <h3>Dual FPM Pool Architecture</h3>
+      <p>To keep the dashboard responsive during load testing, the application routes traffic to two separate PHP-FPM pools:</p>
+      <table>
+        <tr><th>Pool</th><th>Port</th><th>Workers</th><th>Routes</th></tr>
+        <tr><td>Main (www)</td><td>9000</td><td>~8</td><td><code>/api/loadtest/*</code>, <code>/api/simulations/*</code>, other PHP</td></tr>
+        <tr><td>Metrics</td><td>9001</td><td>2</td><td><code>/api/metrics/*</code>, <code>/api/health/*</code>, <code>/api/admin/events</code></td></tr>
+      </table>
+      <p>This ensures the dashboard can always poll for metrics, even when all main workers are busy with load test requests.</p>
 
       <h3>What It Tests</h3>
       <ul>
-        <li><strong>CPU</strong> &mdash; Real hash_pbkdf2() work, file I/O, memory churn, JSON processing</li>
-        <li><strong>Memory</strong> &mdash; Buffers held for entire request duration</li>
-        <li><strong>FPM Workers</strong> &mdash; Worker pool exhaustion under concurrent load</li>
-        <li><strong>Timeouts</strong> &mdash; Random exceptions after 120s (20% probability)</li>
+        <li><strong>CPU</strong> &mdash; Real hash_pbkdf2() cryptographic work</li>
+        <li><strong>Memory</strong> &mdash; Buffers allocated and held for request duration</li>
+        <li><strong>FPM Workers</strong> &mdash; Worker utilization under concurrent load</li>
+        <li><strong>Response Time</strong> &mdash; Increases naturally as requests queue</li>
       </ul>
 
       <div class="info-box">

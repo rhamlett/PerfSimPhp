@@ -4,10 +4,24 @@
 # Per Microsoft docs, it is copied to /etc/nginx/sites-available/default
 # by the startup command, overriding the stock site config.
 #
+# DUAL FPM POOL ARCHITECTURE:
+#   - Port 9000 (www pool): Load test and other endpoints
+#   - Port 9001 (metrics pool): Reserved for /api/metrics/* and /api/health/*
+#   This prevents load test traffic from starving the dashboard.
+#
 # Startup command (set in Azure Portal → General Settings):
 #   /home/site/wwwroot/startup.sh
 #
 # Reference: https://docs.microsoft.com/azure/app-service/configure-language-php?pivots=platform-linux#change-site-root
+
+# Upstream definitions for the two FPM pools
+upstream fpm_main {
+    server 127.0.0.1:9000;
+}
+
+upstream fpm_metrics {
+    server 127.0.0.1:9001;
+}
 
 server {
     #proxy_cache cache;
@@ -34,6 +48,61 @@ server {
         try_files $uri $uri/ /index.php?$args;
     }
 
+    # ==========================================================================
+    # METRICS POOL ROUTES — Dedicated workers that can't be starved by load test
+    # ==========================================================================
+    
+    # /api/metrics/* → metrics pool (port 9001)
+    location ~ ^/api/metrics(/|$) {
+        try_files $uri /index.php?$args;
+        fastcgi_split_path_info ^(.+?\.php)(|/.*)$;
+        fastcgi_pass fpm_metrics;
+        include fastcgi_params;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_intercept_errors on;
+        fastcgi_connect_timeout 5;
+        fastcgi_send_timeout 30;
+        fastcgi_read_timeout 30;
+    }
+
+    # /api/health/* → metrics pool (port 9001)
+    location ~ ^/api/health(/|$) {
+        try_files $uri /index.php?$args;
+        fastcgi_split_path_info ^(.+?\.php)(|/.*)$;
+        fastcgi_pass fpm_metrics;
+        include fastcgi_params;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_intercept_errors on;
+        fastcgi_connect_timeout 5;
+        fastcgi_send_timeout 30;
+        fastcgi_read_timeout 30;
+    }
+
+    # /api/admin/events → metrics pool (event log for dashboard)
+    location = /api/admin/events {
+        try_files $uri /index.php?$args;
+        fastcgi_split_path_info ^(.+?\.php)(|/.*)$;
+        fastcgi_pass fpm_metrics;
+        include fastcgi_params;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_intercept_errors on;
+        fastcgi_connect_timeout 5;
+        fastcgi_send_timeout 30;
+        fastcgi_read_timeout 30;
+    }
+
     # Redirect server error pages to the static page /50x.html
     location = /50x.html {
         root /html/;
@@ -53,10 +122,10 @@ server {
         log_not_found off;
     }
 
-    # PHP-FPM processing
+    # PHP-FPM processing — MAIN POOL (load test, simulations, etc.)
     location ~ [^/]\.php(/|$) {
         fastcgi_split_path_info ^(.+?\.php)(|/.*)$;
-        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_pass fpm_main;
         include fastcgi_params;
         fastcgi_param HTTP_PROXY "";
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;

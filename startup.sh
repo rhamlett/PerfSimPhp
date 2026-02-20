@@ -2,12 +2,39 @@
 # PerfSimPhp - Custom startup script for Azure App Service
 # Per Microsoft docs: https://docs.microsoft.com/azure/app-service/configure-language-php?pivots=platform-linux#change-site-root
 #
-# This script copies our custom nginx site config to the correct location
-# and reloads nginx, then performs app-specific initialization.
+# This script:
+# 1. Copies custom nginx site config (with dual FPM pool routing)
+# 2. Installs the dedicated metrics FPM pool configuration
+# 3. Performs app-specific initialization
+# 4. Starts both FPM pools and nginx
 
 echo "=== PerfSimPhp Startup Script ==="
 echo "PHP Version: $(php -v | head -1)"
 echo "Starting at: $(date)"
+
+# --- Install metrics FPM pool configuration ---
+# This creates a second PHP-FPM pool dedicated to metrics endpoints
+# Prevents load test traffic from starving the dashboard
+METRICS_POOL_SRC="/home/site/wwwroot/metrics-pool.conf"
+FPM_POOL_DIR=""
+
+# Find PHP-FPM pool.d directory (varies by PHP version)
+for dir in /usr/local/etc/php-fpm.d /etc/php/*/fpm/pool.d /etc/php-fpm.d; do
+    if [ -d "$dir" ]; then
+        FPM_POOL_DIR="$dir"
+        break
+    fi
+done
+
+if [ -n "$FPM_POOL_DIR" ] && [ -f "$METRICS_POOL_SRC" ]; then
+    cp "$METRICS_POOL_SRC" "$FPM_POOL_DIR/metrics.conf"
+    echo "Installed metrics FPM pool config to: $FPM_POOL_DIR/metrics.conf"
+else
+    echo "WARNING: Could not install metrics pool. FPM_POOL_DIR=$FPM_POOL_DIR"
+    echo "Searching for pool.d directories..."
+    find /etc /usr/local/etc -name "pool.d" -type d 2>/dev/null || echo "None found"
+    find /etc /usr/local/etc -name "www.conf" 2>/dev/null || echo "No www.conf found"
+fi
 
 # --- Nginx site config override ---
 # The 'default' file is a server{} block (not a full nginx.conf).
@@ -124,4 +151,9 @@ if [ -f "$SELF_PROBE_SCRIPT" ]; then
 fi
 
 # Start php-fpm in foreground to keep container alive
+# Both pools (www on 9000, metrics on 9001) start together
+echo "Starting PHP-FPM (www pool on 9000, metrics pool on 9001)..."
+echo "FPM pool configs in use:"
+ls -la $FPM_POOL_DIR/*.conf 2>/dev/null || echo "Could not list pool configs"
+
 php-fpm -F
