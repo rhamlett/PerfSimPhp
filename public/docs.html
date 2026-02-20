@@ -511,10 +511,10 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000
       <p>To keep the dashboard responsive during load testing, the application routes traffic to two separate PHP-FPM pools:</p>
       <table>
         <tr><th>Pool</th><th>Port</th><th>Workers</th><th>Routes</th></tr>
-        <tr><td>Main (www)</td><td>9000</td><td>~8</td><td><code>/api/loadtest/*</code>, <code>/api/simulations/*</code>, other PHP</td></tr>
-        <tr><td>Metrics</td><td>9001</td><td>2</td><td><code>/api/metrics/*</code>, <code>/api/health/*</code>, <code>/api/admin/events</code></td></tr>
+        <tr><td>Main (www)</td><td>9000</td><td>~8</td><td><code>/api/loadtest/*</code>, <code>/api/simulations/*</code>, <code>/api/metrics/probe</code></td></tr>
+        <tr><td>Metrics</td><td>9001</td><td>4</td><td><code>/api/metrics</code>, <code>/api/metrics/internal-probes</code>, <code>/api/health/*</code>, <code>/api/admin/events</code></td></tr>
       </table>
-      <p>This ensures the dashboard can always poll for metrics, even when all main workers are busy with load test requests.</p>
+      <p>This ensures the dashboard can always poll for metrics, even when all main workers are busy with load test requests. The probe endpoint uses the main pool so it measures actual load test latency.</p>
 
       <h3>What It Tests</h3>
       <ul>

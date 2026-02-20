@@ -30,10 +30,11 @@ To keep the dashboard responsive during load testing, the application uses **two
 │                                                                 │
 │  /api/loadtest/*        ───►  Port 9000 (main pool, ~8 workers) │
 │  /api/simulations/*     ───►       Load test & simulations      │
-│  Other PHP requests     ───►                                    │
+│  /api/metrics/probe     ───►       (probe measures main pool)   │
 │                                                                 │
-│  /api/metrics/*         ───►  Port 9001 (metrics pool, 2 workers)│
-│  /api/health/*          ───►       Dashboard polling (reserved) │
+│  /api/metrics           ───►  Port 9001 (metrics pool, 4 workers)│
+│  /api/metrics/internal  ───►       Dashboard polling (reserved) │
+│  /api/health/*          ───►                                    │
 │  /api/admin/events      ───►                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
