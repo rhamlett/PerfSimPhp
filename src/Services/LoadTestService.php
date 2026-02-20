@@ -103,18 +103,18 @@ class LoadTestService
     }
 
     /**
-     * Gets current statistics from PHP-FPM status (if available).
+     * Gets current statistics (simplified - no concurrent tracking).
+     * Returns format expected by MetricsController probe endpoints.
      */
     public static function getCurrentStats(): array
     {
-        // Try to get FPM status for real worker info
-        $fpmStats = self::getFpmStats();
-
+        // No concurrent tracking in simplified version
+        // Return format compatible with probe endpoints
         return [
-            'activeWorkers' => $fpmStats['active'] ?? 0,
-            'idleWorkers' => $fpmStats['idle'] ?? 0,
-            'totalWorkers' => $fpmStats['total'] ?? 0,
-            'listenQueue' => $fpmStats['listenQueue'] ?? 0,
+            'currentConcurrentRequests' => 0,
+            'totalRequestsProcessed' => 0,
+            'totalExceptionsThrown' => 0,
+            'averageResponseTimeMs' => 0,
             'timestamp' => date('c'),
         ];
     }
@@ -137,36 +137,5 @@ class LoadTestService
         }
 
         return (microtime(true) - $startTime) * 1000;
-    }
-
-    /**
-     * Attempts to get PHP-FPM status via local socket.
-     */
-    private static function getFpmStats(): array
-    {
-        // Try common FPM status paths
-        $statusUrl = 'http://127.0.0.1/fpm-status?json';
-        
-        $ctx = stream_context_create([
-            'http' => [
-                'timeout' => 0.5,
-                'ignore_errors' => true,
-            ],
-        ]);
-
-        $response = @file_get_contents($statusUrl, false, $ctx);
-        if ($response) {
-            $data = @json_decode($response, true);
-            if (is_array($data)) {
-                return [
-                    'active' => $data['active processes'] ?? 0,
-                    'idle' => $data['idle processes'] ?? 0,
-                    'total' => $data['total processes'] ?? 0,
-                    'listenQueue' => $data['listen queue'] ?? 0,
-                ];
-            }
-        }
-
-        return [];
     }
 }
