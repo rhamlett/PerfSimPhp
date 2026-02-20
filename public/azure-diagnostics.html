@@ -311,10 +311,10 @@
 
         <div class="metric-box memory">
           <h4>📊 Memory Working Set (MB)</h4>
-          <p><strong>What it measures:</strong> Total RSS (Resident Set Size) summed across all PHP-FPM worker processes (reads VmRSS from <code>/proc/*/status</code>). Includes both main pool (load tests) and metrics pool workers.</p>
-          <p><strong>Why it matters:</strong> Each PHP-FPM worker has its own memory space. This metric shows memory used by load test operations running in different processes than the metrics collector.</p>
+          <p><strong>What it measures:</strong> Combined metric: PHP-FPM worker RSS (from <code>/proc/*/status</code> VmRSS) plus APCu memory pressure allocations (<code>simulatedMb</code>).</p>
+          <p><strong>Why it matters:</strong> Shows both real PHP worker memory (load tests) AND simulated memory pressure allocations stored in APCu shared memory.</p>
           <p><strong>Normal range:</strong> Depends on worker count and app, but should stabilize after warmup.</p>
-          <p><strong>Warning signs:</strong> Continuous growth over time across multiple workers.</p>
+          <p><strong>Warning signs:</strong> Continuous growth over time without corresponding allocations.</p>
         </div>
 
         <div class="metric-box fpmworkers">

@@ -135,10 +135,12 @@ function updateDashboard(metrics) {
     cpuValue.textContent = (metrics.cpu?.usagePercent || 0).toFixed(1) + '%';
   }
 
-  // Memory value - use fpmPoolRssMb to capture all PHP-FPM workers (including load test processes)
+  // Memory value - combine fpmPoolRssMb + simulatedMb (APCu memory pressure allocations)
   const memoryValue = document.getElementById('memory-value');
   if (memoryValue) {
-    memoryValue.textContent = (metrics.memory?.fpmPoolRssMb || metrics.memory?.usedMb || 0).toFixed(0);
+    const fpmRss = metrics.memory?.fpmPoolRssMb || 0;
+    const simulated = metrics.memory?.simulatedMb || 0;
+    memoryValue.textContent = (fpmRss + simulated).toFixed(0);
   }
 
   // Memory total (system RAM)

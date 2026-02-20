@@ -128,7 +128,7 @@ See [Enabling Application Insights for PHP](public/azure-diagnostics.html#enable
 The real-time dashboard displays:
 
 - **CPU Usage** — Percentage from `/proc/stat` with delta calculation
-- **Memory (MB)** — Total RSS across all PHP-FPM workers (from `/proc/*/status` VmRSS). Shows load test memory allocations.
+- **Memory (MB)** — Combined: PHP-FPM worker RSS + APCu memory pressure allocations. Shows both load test memory and memory simulation.
 - **FPM Workers** — Active workers and busy count
 - **RSS Memory** — Resident set size of the current metrics process
 - **Request Latency** — Live latency chart from XHR probes (targets <200ms)
