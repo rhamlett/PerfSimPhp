@@ -358,52 +358,36 @@ function pollEventsOnce() {
 // Latency Probe Polling
 // ============================================================================
 
+// Timer for frontend probes (1s interval)
+let frontendProbePollTimer = null;
+
 /**
- * Starts batch probing via /api/metrics/internal-probes at the configured interval.
- * The server performs multiple internal curl probes to localhost:8080, which
- * bypass Azure's stamp frontend and don't appear in AppLens metrics.
+ * Starts probe polling with two separate intervals:
+ * - Internal probes to localhost:8080 every 100ms (bypasses stamp frontend)
+ * - Frontend probes through AppLens every 1000ms (visible in AppLens)
  */
 function startProbePolling() {
-  if (probePollTimer) clearTimeout(probePollTimer);
+  if (probePollTimer) clearInterval(probePollTimer);
+  if (frontendProbePollTimer) clearInterval(frontendProbePollTimer);
 
-  // Fire first probe immediately, then schedule subsequent probes after completion
-  console.log('[polling-client] Starting probe polling');
-  probeOnce();
-}
-
-/**
- * Schedules the next probe immediately after HTTP response.
- * Minimal delay (10ms) for browser to process, then start next request.
- * The server-side processing (~1s) provides natural pacing.
- */
-function scheduleNextProbe() {
-  // Minimal delay - just enough for browser to breathe
-  // Server response time (~1s) provides the real pacing
-  probePollTimer = setTimeout(() => {
-    probeOnce();
-  }, 10);
-}
-
-/**
- * Fetches a batch of internal latency probes from the server.
- * The server does multiple curl requests to localhost:8080/api/metrics/probe,
- * avoiding the stamp frontend while still measuring real PHP-FPM latency.
- * 
- * TIMING: The next request is scheduled immediately after HTTP response
- * (not after all probes are dispatched). This overlaps fetch/dispatch cycles
- * so that while batch N+1 is being fetched (~1s), batch N is being displayed.
- */
-function probeOnce() {
-  // Use internal batch probing (reduces AppLens traffic)
-  const params = new URLSearchParams({
-    count: INTERNAL_PROBE_COUNT.toString(),
-    interval: INTERNAL_PROBE_INTERVAL.toString(),
-    t: Date.now().toString(),
-  });
-  const probeUrl = '/api/metrics/internal-probes?' + params.toString();
+  console.log('[polling-client] Starting probe polling (internal: 100ms, frontend: 1000ms)');
   
-  // Track the external request time for AppLens visibility
-  const externalRequestStart = Date.now();
+  // Internal probes every 100ms - measures PHP-FPM latency via localhost
+  internalProbeOnce();
+  probePollTimer = setInterval(internalProbeOnce, INTERNAL_PROBE_INTERVAL);
+  
+  // Frontend probes every 1s - measures full round-trip through AppLens
+  frontendProbeOnce();
+  frontendProbePollTimer = setInterval(frontendProbeOnce, 1000);
+}
+
+/**
+ * Performs a single internal probe via the metrics pool.
+ * The server does one curl to localhost:8080/api/metrics/probe,
+ * measuring real PHP-FPM worker acquisition and processing time.
+ */
+function internalProbeOnce() {
+  const probeUrl = '/api/metrics/internal-probe?t=' + Date.now();
 
   fetchWithTimeout(probeUrl, { 
     method: 'GET',
@@ -417,50 +401,58 @@ function probeOnce() {
     })
     .then(data => {
       onPollSuccess();
-      
-      // Add the external request latency to the chart (for AppLens visibility)
-      const externalLatency = Date.now() - externalRequestStart;
+
       if (typeof onProbeLatency === 'function') {
         onProbeLatency({
-          latencyMs: externalLatency,
+          latencyMs: data.latencyMs,
+          timestamp: data.timestamp,
+          success: data.success,
+          loadTestActive: data.loadTestActive || false,
+          loadTestConcurrent: data.loadTestConcurrent || 0,
+        });
+      }
+
+      if (!data.success && data._debug) {
+        console.warn('[polling-client] Internal probe failed:', data._debug);
+      }
+    })
+    .catch(error => {
+      console.error('[polling-client] Internal probe failed:', error.message || error);
+    });
+}
+
+/**
+ * Performs a single probe through the stamp frontend (visible in AppLens).
+ * Measures full round-trip latency including Azure Front Door and stamp frontend.
+ */
+function frontendProbeOnce() {
+  const probeStart = Date.now();
+  const probeUrl = '/api/metrics/probe?t=' + probeStart;
+
+  fetchWithTimeout(probeUrl, { 
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+  }, PROBE_TIMEOUT_MS)
+    .then(response => {
+      const latency = Date.now() - probeStart;
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status);
+      }
+      return response.json().then(data => ({ data, latency }));
+    })
+    .then(({ data, latency }) => {
+      if (typeof onProbeLatency === 'function') {
+        onProbeLatency({
+          latencyMs: latency,
           timestamp: Date.now(),
           success: true,
-          loadTestActive: data.probes?.[0]?.loadTestActive || false,
-          loadTestConcurrent: data.probes?.[0]?.loadTestConcurrent || 0,
-        });
-      }
-
-      // Debug logging for troubleshooting
-      const failedProbes = data.probes?.filter(p => !p.success) || [];
-      if (failedProbes.length > 0) {
-        console.warn('[polling-client] Internal probes failed:', {
-          port: data.internalPort,
-          failedCount: failedProbes.length,
-          firstError: failedProbes[0]?._debug
-        });
-      }
-
-      // Process each probe in the batch, dispatching at 100ms intervals
-      // This gives smooth chart updates while only making 1 request/sec to AppLens
-      if (data.probes && Array.isArray(data.probes)) {
-        data.probes.forEach((probe, index) => {
-          setTimeout(() => {
-            if (typeof onProbeLatency === 'function') {
-              onProbeLatency({
-                latencyMs: probe.latencyMs,
-                timestamp: probe.timestamp,
-                success: probe.success,
-                loadTestActive: probe.loadTestActive || false,
-                loadTestConcurrent: probe.loadTestConcurrent || 0,
-              });
-            }
-          }, index * INTERNAL_PROBE_INTERVAL);
+          loadTestActive: data.loadTest?.active || false,
+          loadTestConcurrent: data.loadTest?.concurrent || 0,
         });
       }
     })
     .catch(error => {
-      console.error('[polling-client] Probe batch failed:', error.message || error);
-      // Report a single failure for the batch
+      console.error('[polling-client] Frontend probe failed:', error.message || error);
       if (typeof onProbeLatency === 'function') {
         onProbeLatency({
           latencyMs: 0,
@@ -470,11 +462,6 @@ function probeOnce() {
           loadTestConcurrent: 0,
         });
       }
-    })
-    .finally(() => {
-      // Schedule next probe IMMEDIATELY after HTTP response (not after dispatches)
-      // This overlaps: while server processes batch N+1 (~1s), batch N displays (~1s)
-      scheduleNextProbe();
     });
 }
 
@@ -488,7 +475,8 @@ function probeOnce() {
 function stopAllPolling() {
   if (metricsPollTimer) { clearInterval(metricsPollTimer); metricsPollTimer = null; }
   if (eventsPollTimer) { clearInterval(eventsPollTimer); eventsPollTimer = null; }
-  if (probePollTimer) { clearTimeout(probePollTimer); probePollTimer = null; }
+  if (probePollTimer) { clearInterval(probePollTimer); probePollTimer = null; }
+  if (frontendProbePollTimer) { clearInterval(frontendProbePollTimer); frontendProbePollTimer = null; }
 }
 
 /**

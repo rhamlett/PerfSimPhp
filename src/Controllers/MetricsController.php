@@ -99,16 +99,63 @@ class MetricsController
     }
 
     /**
-     * GET /api/metrics/internal-probes
-     * Performs batch internal probes via localhost:8080 (bypasses stamp frontend).
+     * GET /api/metrics/internal-probe
+     * Performs a single internal probe via localhost:8080 (bypasses stamp frontend).
      * 
-     * This endpoint does multiple curl requests to localhost:8080/api/metrics/probe
-     * and returns the latency measurements. The internal requests don't go through
-     * Azure's front-end infrastructure, so they don't appear in AppLens.
-     * 
-     * Query params:
-     *   count - Number of probes to perform (default: 5, max: 10)
-     *   interval - Milliseconds between probes (default: 100, min: 50)
+     * This endpoint does one curl request to localhost:8080/api/metrics/probe
+     * and returns the latency measurement. Called every 100ms by the client.
+     */
+    public static function internalProbe(): array
+    {
+        try {
+            $port = '8080';
+            $probeUrl = "http://127.0.0.1:{$port}/api/metrics/probe?t=" . microtime(true);
+            
+            if (!function_exists('curl_init')) {
+                return ['error' => 'curl extension not available', 'latencyMs' => 0, 'success' => false];
+            }
+            
+            $stats = LoadTestService::getCurrentStats();
+            $probeStart = microtime(true);
+            
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $probeUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_HTTPHEADER => ['X-Internal-Probe: true'],
+            ]);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            $probeEnd = microtime(true);
+            $latencyMs = ($probeEnd - $probeStart) * 1000;
+            
+            $result = [
+                'latencyMs' => round($latencyMs, 2),
+                'timestamp' => (int) ($probeEnd * 1000),
+                'success' => $httpCode === 200 && empty($error),
+                'loadTestActive' => $stats['currentConcurrentRequests'] > 0,
+                'loadTestConcurrent' => $stats['currentConcurrentRequests'],
+            ];
+            
+            if ($httpCode !== 200 || !empty($error)) {
+                $result['_debug'] = ['httpCode' => $httpCode, 'error' => $error];
+            }
+            
+            return $result;
+        } catch (\Throwable $e) {
+            return ['error' => $e->getMessage(), 'latencyMs' => 0, 'success' => false];
+        }
+    }
+
+    /**
+     * GET /api/metrics/internal-probes (DEPRECATED)
+     * @deprecated Use internalProbe() instead - called every 100ms by client
      */
     public static function internalProbes(): array
     {

@@ -112,6 +112,9 @@ class Router
         if ($method === 'GET' && $path === '/api/metrics/probe') {
             return self::ok(MetricsController::probe());
         }
+        if ($method === 'GET' && $path === '/api/metrics/internal-probe') {
+            return self::ok(MetricsController::internalProbe());
+        }
         if ($method === 'GET' && $path === '/api/metrics/internal-probes') {
             return self::ok(MetricsController::internalProbes());
         }
