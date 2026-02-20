@@ -115,20 +115,8 @@ class LoadTestService
             'cycles' => 0,
         ];
 
-        EventLogService::info(
-            'LOADTEST_START',
-            "Load test started (concurrent: {$currentConcurrent}, degradation: {$degradationMultiplier}x)",
-            null,
-            'loadtest',
-            [
-                'concurrent' => $currentConcurrent,
-                'softLimit' => $params['softLimit'],
-                'overLimit' => $overLimit,
-                'degradationMultiplier' => round($degradationMultiplier, 2),
-                'targetDurationMs' => $params['targetDurationMs'],
-                'multiplierCapped' => $rawMultiplier > self::MAX_DEGRADATION_MULTIPLIER,
-            ]
-        );
+        // NOTE: EventLogService calls removed from hot path - they use blocking SharedStorage::modify
+        // For high-concurrency load tests, logging every request causes lock contention
 
         $startTime = microtime(true);
         $allocatedBytes = $params['memorySizeKb'] * 1024;
@@ -181,13 +169,8 @@ class LoadTestService
                 // under heavy system load (prevents 240s Azure timeout)
                 $currentElapsedMs = (microtime(true) - $startTime) * 1000;
                 if ($currentElapsedMs > self::MAX_DURATION_MS) {
-                    EventLogService::warn(
-                        'LOADTEST_FAILSAFE',
-                        "Force exit: elapsed {$currentElapsedMs}ms exceeds " . self::MAX_DURATION_MS . "ms max",
-                        null,
-                        'loadtest',
-                        ['elapsedMs' => round($currentElapsedMs), 'maxMs' => self::MAX_DURATION_MS]
-                    );
+                    // Skip EventLogService - it uses blocking SharedStorage::modify
+                    error_log("[LoadTest] FAILSAFE: Force exit at {$currentElapsedMs}ms (max: " . self::MAX_DURATION_MS . "ms)");
                     break;
                 }
 
@@ -211,17 +194,8 @@ class LoadTestService
             $elapsedMs = (int) ((microtime(true) - $startTime) * 1000);
             self::incrementStat('totalExceptions');
 
-            EventLogService::error(
-                'LOADTEST_EXCEPTION',
-                get_class($e) . ": " . $e->getMessage() . " after {$elapsedMs}ms",
-                null,
-                'loadtest',
-                [
-                    'exceptionType' => get_class($e),
-                    'elapsedMs' => $elapsedMs,
-                    'concurrent' => $currentConcurrent,
-                ]
-            );
+            // Log to error_log instead of EventLogService (non-blocking)
+            error_log("[LoadTest] EXCEPTION: " . get_class($e) . ": " . $e->getMessage() . " after {$elapsedMs}ms");
 
             throw $e;
         } finally {
@@ -237,22 +211,7 @@ class LoadTestService
                 @unlink($tempFile);
             }
 
-            // Log completion with work metrics
-            EventLogService::info(
-                'LOADTEST_COMPLETE',
-                "Load test: {$elapsedMs}ms, {$workMetrics['cycles']} cycles (concurrent: {$currentConcurrent})",
-                null,
-                'loadtest',
-                [
-                    'elapsedMs' => $elapsedMs,
-                    'concurrentAtStart' => $currentConcurrent,
-                    'cycles' => $workMetrics['cycles'],
-                    'cpuWorkMs' => round($workMetrics['cpuWorkMs'], 1),
-                    'fileIoMs' => round($workMetrics['fileIoMs'], 1),
-                    'memoryChurnMs' => round($workMetrics['memoryChurnMs'], 1),
-                    'jsonWorkMs' => round($workMetrics['jsonWorkMs'], 1),
-                ]
-            );
+            // NOTE: EventLogService calls removed - they use blocking SharedStorage::modify
 
             // Release memory
             $memory = null;
@@ -269,13 +228,23 @@ class LoadTestService
             'totalExceptionsThrown' => 0,
             'totalResponseTimeMs' => 0,
         ];
-        
-        $stats = SharedStorage::get(self::STATS_KEY, $defaultStats);
-        
-        // Ensure all required keys exist (handles corrupted/partial storage data)
-        $stats = array_merge($defaultStats, is_array($stats) ? $stats : []);
 
-        $concurrent = SharedStorage::get(self::CONCURRENT_KEY, 0);
+        // Read stats from local file (non-blocking read)
+        $statsFile = dirname(__DIR__, 2) . '/storage/loadtest_stats.json';
+        $stats = $defaultStats;
+        if (file_exists($statsFile)) {
+            $contents = @file_get_contents($statsFile);
+            if ($contents) {
+                $decoded = json_decode($contents, true);
+                if (is_array($decoded)) {
+                    $stats = array_merge($defaultStats, $decoded);
+                }
+            }
+        }
+
+        // Count concurrent requests via marker files (non-blocking)
+        $markers = @glob(self::MARKER_DIR . '/*.marker');
+        $concurrent = is_array($markers) ? count($markers) : 0;
 
         $avgResponseTime = $stats['totalRequestsProcessed'] > 0
             ? $stats['totalResponseTimeMs'] / $stats['totalRequestsProcessed']
@@ -608,59 +577,148 @@ class LoadTestService
     }
 
     // =========================================================================
-    // CONCURRENT COUNTER (SharedStorage-based atomic operations)
+    // CONCURRENT COUNTER (Non-blocking file-marker approach)
+    // Uses individual marker files instead of shared counter to avoid lock contention
     // =========================================================================
 
+    /** Directory for concurrent request marker files */
+    private const MARKER_DIR = '/dev/shm/loadtest_markers';
+
+    /** Current request's marker file path (set during incrementConcurrent) */
+    private static ?string $currentMarkerFile = null;
+
+    /**
+     * Registers this request as active by creating a unique marker file.
+     * Returns estimated concurrent count by counting existing markers.
+     * Non-blocking - never waits for locks.
+     */
     private static function incrementConcurrent(): int
     {
-        return SharedStorage::modify(self::CONCURRENT_KEY, function (?int $count) {
-            return ($count ?? 0) + 1;
-        }, 0);
+        // Ensure marker directory exists
+        if (!is_dir(self::MARKER_DIR)) {
+            @mkdir(self::MARKER_DIR, 0755, true);
+        }
+
+        // Create unique marker file for this request
+        self::$currentMarkerFile = self::MARKER_DIR . '/req_' . getmypid() . '_' . uniqid() . '.marker';
+        @file_put_contents(self::$currentMarkerFile, (string)time());
+
+        // Count existing markers (non-blocking glob)
+        $markers = @glob(self::MARKER_DIR . '/*.marker');
+        return is_array($markers) ? count($markers) : 1;
     }
 
+    /**
+     * Removes this request's marker file.
+     * Returns remaining concurrent count.
+     */
     private static function decrementConcurrent(): int
     {
-        return SharedStorage::modify(self::CONCURRENT_KEY, function (?int $count) {
-            return max(0, ($count ?? 0) - 1);
-        }, 0);
+        // Remove this request's marker
+        if (self::$currentMarkerFile && file_exists(self::$currentMarkerFile)) {
+            @unlink(self::$currentMarkerFile);
+        }
+        self::$currentMarkerFile = null;
+
+        // Clean up stale markers (older than 5 minutes) - non-blocking
+        self::cleanupStaleMarkers();
+
+        // Count remaining markers
+        $markers = @glob(self::MARKER_DIR . '/*.marker');
+        return is_array($markers) ? count($markers) : 0;
+    }
+
+    /**
+     * Removes marker files older than 5 minutes (stale from crashed requests).
+     */
+    private static function cleanupStaleMarkers(): void
+    {
+        $cutoff = time() - 300; // 5 minutes
+        $markers = @glob(self::MARKER_DIR . '/*.marker');
+        if (!is_array($markers)) return;
+
+        foreach ($markers as $marker) {
+            $mtime = @filemtime($marker);
+            if ($mtime && $mtime < $cutoff) {
+                @unlink($marker);
+            }
+        }
     }
 
     private static function incrementStat(string $stat): void
     {
-        $defaultStats = [
-            'totalRequestsProcessed' => 0,
-            'totalExceptionsThrown' => 0,
-            'totalResponseTimeMs' => 0,
-        ];
-        SharedStorage::modify(self::STATS_KEY, function ($stats) use ($stat, $defaultStats) {
-            // Handle null, empty array, or non-array values
-            if (!is_array($stats) || empty($stats)) {
-                $stats = $defaultStats;
-            } else {
-                $stats = array_merge($defaultStats, $stats);
-            }
-            $stats[$stat] = ($stats[$stat] ?? 0) + 1;
-            return $stats;
-        }, $defaultStats);
+        // Use non-blocking stats update - skip if can't acquire lock quickly
+        // Stats are nice-to-have, not critical for load test function
+        try {
+            self::nonBlockingStatsUpdate(function(&$stats) use ($stat) {
+                $stats[$stat] = ($stats[$stat] ?? 0) + 1;
+            });
+        } catch (\Throwable $e) {
+            // Silently skip - stats aren't critical
+        }
     }
 
     private static function updateStats(int $elapsedMs): void
     {
+        // Use non-blocking stats update - skip if can't acquire lock quickly
+        try {
+            self::nonBlockingStatsUpdate(function(&$stats) use ($elapsedMs) {
+                $stats['totalRequestsProcessed']++;
+                $stats['totalResponseTimeMs'] += $elapsedMs;
+            });
+        } catch (\Throwable $e) {
+            // Silently skip - stats aren't critical
+        }
+    }
+
+    /**
+     * Non-blocking stats update. Tries to acquire lock without waiting.
+     * If lock unavailable, skips the update (stats are best-effort).
+     */
+    private static function nonBlockingStatsUpdate(callable $modifier): void
+    {
+        $file = dirname(__DIR__, 2) . '/storage/loadtest_stats.json';
+        $dir = dirname($file);
+        
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
         $defaultStats = [
             'totalRequestsProcessed' => 0,
             'totalExceptionsThrown' => 0,
             'totalResponseTimeMs' => 0,
         ];
-        SharedStorage::modify(self::STATS_KEY, function ($stats) use ($elapsedMs, $defaultStats) {
-            // Handle null, empty array, or non-array values
-            if (!is_array($stats) || empty($stats)) {
+
+        $fp = @fopen($file, 'c+');
+        if (!$fp) return;
+
+        // NON-BLOCKING lock - if we can't get it immediately, skip
+        if (!flock($fp, LOCK_EX | LOCK_NB)) {
+            fclose($fp);
+            return; // Another request has the lock, skip this update
+        }
+
+        try {
+            $contents = stream_get_contents($fp);
+            $stats = ($contents !== false && $contents !== '') 
+                ? json_decode($contents, true) 
+                : $defaultStats;
+            
+            if (!is_array($stats)) {
                 $stats = $defaultStats;
-            } else {
-                $stats = array_merge($defaultStats, $stats);
             }
-            $stats['totalRequestsProcessed']++;
-            $stats['totalResponseTimeMs'] += $elapsedMs;
-            return $stats;
-        }, $defaultStats);
+            $stats = array_merge($defaultStats, $stats);
+
+            $modifier($stats);
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($stats, JSON_PRETTY_PRINT));
+            fflush($fp);
+        } finally {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
     }
 }
