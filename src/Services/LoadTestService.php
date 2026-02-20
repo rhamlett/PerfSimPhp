@@ -17,7 +17,7 @@
  *
  * PARAMETERS (2 tunable):
  *   - workMs (default: 100) — Duration of CPU work in milliseconds
- *   - memoryKb (default: 1024) — Memory to allocate in KB
+ *   - memoryKb (default: 5000) — Memory to allocate in KB (5MB)
  *
  * WHAT'S MEASURED:
  *   - Response time includes: queue wait + work time + PHP overhead
@@ -32,6 +32,8 @@ declare(strict_types=1);
 
 namespace PerfSimPhp\Services;
 
+use PerfSimPhp\Services\EventLogService;
+
 class LoadTestService
 {
     /** Maximum work duration to prevent runaway (5 seconds) */
@@ -40,7 +42,7 @@ class LoadTestService
     /** Default request parameters */
     private const DEFAULTS = [
         'workMs' => 100,      // Duration of CPU work (ms)
-        'memoryKb' => 1024,   // Memory to hold during work (KB)
+        'memoryKb' => 5000,   // Memory to hold during work (KB) - 5MB default
     ];
 
     /**
@@ -90,6 +92,19 @@ class LoadTestService
 
         // Calculate total elapsed time
         $totalElapsedMs = (microtime(true) - $startTime) * 1000;
+
+        // Log to event log (sampled - ~1% of requests to avoid flooding)
+        if (mt_rand(1, 100) === 1) {
+            try {
+                EventLogService::info(
+                    'LOAD_TEST_REQUEST',
+                    sprintf('Load test: %dms work, %dKB mem, %.0fms total (pid %d)', 
+                        $workMs, $memoryKb, $totalElapsedMs, getmypid())
+                );
+            } catch (\Throwable $e) {
+                // Silently skip - event log is nice-to-have
+            }
+        }
 
         return [
             'success' => true,
