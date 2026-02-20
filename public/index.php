@@ -53,6 +53,7 @@ require_once __DIR__ . '/../src/bootstrap.php';
 use PerfSimPhp\Router;
 use PerfSimPhp\Middleware\ErrorHandler;
 use PerfSimPhp\Middleware\RequestLogger;
+use PerfSimPhp\Services\TelemetryService;
 
 // ============================================================================
 // PHP BUILT-IN SERVER: Serve static files directly
@@ -98,6 +99,9 @@ $requestStart = microtime(true);
 $method = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
+// Start Application Insights request tracking (no-op if not configured)
+TelemetryService::startRequest($method, $uri);
+
 // Set JSON content type for API routes
 if (str_starts_with($uri, '/api/')) {
     header('Content-Type: application/json');
@@ -121,9 +125,18 @@ try {
         http_response_code($response['status'] ?? 200);
         echo json_encode($response['body'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
+    
+    // End Application Insights request tracking
+    TelemetryService::endRequest(http_response_code());
 } catch (\Throwable $e) {
+    // Track exception in Application Insights
+    TelemetryService::trackException($e);
+    TelemetryService::endRequest(500, false);
     ErrorHandler::handleException($e);
 }
+
+// Flush telemetry before request ends
+TelemetryService::flush();
 
 // Log request completion
 RequestLogger::log($method, $uri, http_response_code(), $requestStart);

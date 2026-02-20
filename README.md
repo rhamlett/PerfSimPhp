@@ -105,7 +105,25 @@ workers/
 
 For detailed deployment with GitHub Actions and OIDC, see the [Azure Deployment Guide](public/azure-deployment.html).
 
-## 📊 Dashboard
+## � Application Insights (Optional)
+
+PHP requires manual configuration for Application Insights telemetry. Add these App Settings:
+
+| Setting | Required | Description |
+|---------|----------|-------------|
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | **Yes** | Connection string from your Application Insights resource |
+| `OTEL_SERVICE_NAME` | No | Custom service name (defaults to `PerfSimPhp`) |
+
+**To get the connection string:**
+1. Create an Application Insights resource in Azure Portal
+2. Go to **Overview** → copy the **Connection String**
+3. Add it as an App Setting in your App Service
+
+When not configured, the app runs normally with telemetry disabled (zero overhead).
+
+See [Enabling Application Insights for PHP](public/azure-diagnostics.html#enable-app-insights) for detailed setup instructions.
+
+## �📊 Dashboard
 
 The real-time dashboard displays:
 

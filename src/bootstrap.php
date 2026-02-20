@@ -42,3 +42,8 @@ $storageDir = __DIR__ . '/../storage';
 if (!is_dir($storageDir)) {
     mkdir($storageDir, 0755, true);
 }
+
+// Initialize Application Insights telemetry (if configured)
+// Set APPLICATIONINSIGHTS_CONNECTION_STRING in App Settings to enable
+use PerfSimPhp\Services\TelemetryService;
+TelemetryService::init();
