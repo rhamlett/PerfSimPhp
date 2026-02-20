@@ -378,7 +378,7 @@ function startProbePolling() {
 
 /**
  * Performs a single probe through the stamp frontend.
- * Measures full round-trip latency including Azure Front Door and stamp frontend.
+ * Uses lightweight health probe for accurate latency measurement.
  * Skips if a previous probe is still in flight to prevent pile-up.
  */
 function probeOnce() {
@@ -389,7 +389,7 @@ function probeOnce() {
   probeInFlight = true;
   
   const probeStart = Date.now();
-  const probeUrl = '/api/metrics/probe?t=' + probeStart;
+  const probeUrl = '/api/health/probe?t=' + probeStart;
 
   fetchWithTimeout(probeUrl, { 
     method: 'GET',
@@ -410,8 +410,8 @@ function probeOnce() {
           latencyMs: latency,
           timestamp: Date.now(),
           success: true,
-          loadTestActive: data.loadTest?.active || false,
-          loadTestConcurrent: data.loadTest?.concurrent || 0,
+          loadTestActive: false,
+          loadTestConcurrent: 0,
         });
       }
     })

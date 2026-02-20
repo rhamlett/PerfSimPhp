@@ -86,6 +86,23 @@ server {
         fastcgi_read_timeout 30;
     }
 
+    # /api/health/probe → MAIN pool (measures main pool latency for dashboard)
+    location = /api/health/probe {
+        try_files $uri /index.php?$args;
+        fastcgi_split_path_info ^(.+?\.php)(|/.*)$;
+        fastcgi_pass fpm_main;
+        include fastcgi_params;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param QUERY_STRING $query_string;
+        fastcgi_param REQUEST_URI $request_uri;
+        fastcgi_intercept_errors on;
+        fastcgi_connect_timeout 5;
+        fastcgi_send_timeout 30;
+        fastcgi_read_timeout 30;
+    }
+
     # /api/health/* → metrics pool (port 9001)
     location ~ ^/api/health(/|$) {
         try_files $uri /index.php?$args;
