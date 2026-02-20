@@ -44,8 +44,8 @@ class LoadTestService
     /** Probability of throwing exception per check after threshold */
     private const EXCEPTION_PROBABILITY = 0.20;
 
-    /** Directory for temp file I/O work */
-    private const TEMP_DIR = '/tmp/loadtest';
+    /** Directory for temp file I/O work - uses tmpfs (memory-backed) to avoid disk blocking */
+    private const TEMP_DIR = '/dev/shm/loadtest';
 
     /** Maximum allowed duration to prevent runaway (60 seconds) */
     private const MAX_DURATION_MS = 60000;
@@ -63,7 +63,7 @@ class LoadTestService
     ];
 
     /** Internal work settings (not user-tunable) */
-    private const INTERNAL_FILE_IO_KB = 20;
+    private const INTERNAL_FILE_IO_KB = 4;       // Small writes to avoid I/O contention
     private const INTERNAL_JSON_DEPTH = 3;
     private const INTERNAL_MEMORY_CHURN_KB = 100;
 
@@ -333,6 +333,7 @@ class LoadTestService
      *
      * Uses the same approach as cpu-worker.php for consistency.
      * Each hash_pbkdf2 call with 1000 iterations takes ~1-2ms.
+     * Hard cap at 5 seconds to prevent runaway under extreme conditions.
      *
      * @param float $workMs Target milliseconds of CPU work
      * @return float Actual milliseconds of CPU work performed
@@ -343,10 +344,11 @@ class LoadTestService
         
         $startTime = microtime(true);
         $endTime = $startTime + ($workMs / 1000);
+        $hardLimit = $startTime + 5.0; // 5 second absolute cap
         
         // Each hash_pbkdf2 call does real cryptographic work
         // This produces measurable CPU load in monitoring tools
-        while (microtime(true) < $endTime) {
+        while (microtime(true) < $endTime && microtime(true) < $hardLimit) {
             hash_pbkdf2('sha256', 'loadtest', 'salt', 1000, 32, false);
         }
         
@@ -364,8 +366,9 @@ class LoadTestService
     }
 
     /**
-     * Performs file I/O work - writes and reads data to/from disk.
-     * This creates real I/O load visible in disk metrics.
+     * Performs file I/O work - writes and reads data to/from tmpfs.
+     * Uses /dev/shm (memory-backed) to avoid disk blocking under load.
+     * Falls back to in-memory operation if tmpfs unavailable.
      *
      * @param string $tempFile Path to temp file
      * @param int $sizeKb Amount of data to write/read in KB
@@ -377,22 +380,32 @@ class LoadTestService
 
         $startTime = microtime(true);
 
-        // Generate data to write (use random-ish content to prevent compression)
-        $data = '';
-        for ($i = 0; $i < $sizeKb; $i++) {
-            $data .= md5((string)($i + microtime(true))) . str_repeat('x', 992); // ~1KB chunks
-        }
+        try {
+            // Check if temp directory is usable (tmpfs should always be fast)
+            $dir = dirname($tempFile);
+            if (!is_dir($dir) || !is_writable($dir)) {
+                // Fallback: skip file I/O, do string work instead
+                $data = str_repeat(md5((string)microtime(true)), $sizeKb * 32);
+                $hash = md5($data);
+                return (microtime(true) - $startTime) * 1000;
+            }
 
-        // Write to file (creates real disk I/O)
-        file_put_contents($tempFile, $data);
+            // Generate data to write (small, fast)
+            $data = str_repeat(md5((string)microtime(true)), $sizeKb * 32); // ~1KB per 32 md5s
 
-        // Read it back (forces actual disk read, not just cache)
-        clearstatcache(true, $tempFile);
-        $readData = file_get_contents($tempFile);
+            // Write to tmpfs (memory-backed, non-blocking)
+            @file_put_contents($tempFile, $data);
 
-        // Verify to prevent optimization
-        if (strlen($readData) !== strlen($data)) {
-            error_log("[LoadTest] File I/O verification failed");
+            // Read it back
+            $readData = @file_get_contents($tempFile);
+
+            // Verify to prevent optimization
+            if ($readData && strlen($readData) !== strlen($data)) {
+                error_log("[LoadTest] File I/O verification failed");
+            }
+        } catch (\Throwable $e) {
+            // On any error, just return elapsed time - don't let I/O failures break the test
+            error_log("[LoadTest] File I/O error: " . $e->getMessage());
         }
 
         return (microtime(true) - $startTime) * 1000;
