@@ -360,6 +360,8 @@ function pollEventsOnce() {
 
 // Timer for frontend probes (1s interval)
 let frontendProbePollTimer = null;
+// Flag to prevent overlapping internal probes
+let internalProbeInFlight = false;
 
 /**
  * Starts probe polling with two separate intervals:
@@ -373,6 +375,8 @@ function startProbePolling() {
   console.log('[polling-client] Starting probe polling (internal: 100ms, frontend: 1000ms)');
   
   // Internal probes every 100ms - measures PHP-FPM latency via localhost
+  // Uses a flag to prevent pile-up if requests take longer than 100ms
+  internalProbeInFlight = false;
   internalProbeOnce();
   probePollTimer = setInterval(internalProbeOnce, INTERNAL_PROBE_INTERVAL);
   
@@ -385,8 +389,16 @@ function startProbePolling() {
  * Performs a single internal probe via the metrics pool.
  * The server does one curl to localhost:8080/api/metrics/probe,
  * measuring real PHP-FPM worker acquisition and processing time.
+ * 
+ * Skips if a previous probe is still in flight to prevent pile-up.
  */
 function internalProbeOnce() {
+  // Skip if previous request hasn't completed
+  if (internalProbeInFlight) {
+    return;
+  }
+  internalProbeInFlight = true;
+  
   const probeUrl = '/api/metrics/internal-probe?t=' + Date.now();
 
   fetchWithTimeout(probeUrl, { 
@@ -418,6 +430,9 @@ function internalProbeOnce() {
     })
     .catch(error => {
       console.error('[polling-client] Internal probe failed:', error.message || error);
+    })
+    .finally(() => {
+      internalProbeInFlight = false;
     });
 }
 

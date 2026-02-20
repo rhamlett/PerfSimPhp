@@ -122,8 +122,8 @@ class MetricsController
             curl_setopt_array($ch, [
                 CURLOPT_URL => $probeUrl,
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_CONNECTTIMEOUT => 0,
                 CURLOPT_HTTPHEADER => ['X-Internal-Probe: true'],
             ]);
             
