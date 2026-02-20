@@ -1,18 +1,23 @@
 <?php
 /**
  * =============================================================================
- * LOAD TEST CONTROLLER — Azure Load Testing Integration REST API
+ * LOAD TEST CONTROLLER — Simple Load Testing REST API
  * =============================================================================
  *
  * ENDPOINTS:
- *   GET /api/loadtest       → Execute load test work (all params optional)
- *   GET /api/loadtest/stats → Current statistics without performing work
+ *   GET /api/loadtest       → Execute load test work
+ *   GET /api/loadtest/stats → Current FPM worker statistics
  *
  * Designed for Azure Load Testing, JMeter, k6, Gatling.
  *
- * SAFEGUARDS:
- *   - Max duration: 60 seconds per request
- *   - Max degradation multiplier: 30x
+ * PARAMETERS:
+ *   - workMs (int)    : Duration of CPU work in ms (default: 100, max: 5000)
+ *   - memoryKb (int)  : Memory to allocate in KB (default: 1024, max: 50000)
+ *
+ * EXAMPLES:
+ *   GET /api/loadtest
+ *   GET /api/loadtest?workMs=200
+ *   GET /api/loadtest?workMs=50&memoryKb=2048
  *
  * @module src/Controllers/LoadTestController.php
  */
@@ -27,35 +32,26 @@ class LoadTestController
 {
     /**
      * GET /api/loadtest
-     * Executes a load test request with configurable resource consumption.
-     *
-     * QUERY PARAMETERS (all optional, 5 total):
-     *   - targetDurationMs (int)    : Base request duration in ms (default: 1000)
-     *   - memorySizeKb (int)        : Memory to allocate in KB (default: 5000)
-     *   - cpuWorkMs (int)           : CPU work per cycle in ms (default: 20)
-     *   - softLimit (int)           : Concurrent requests before degradation (default: 20)
-     *   - degradationFactor (float) : Multiplier per concurrent over limit (default: 1.2)
-     *
-     * EXAMPLES:
-     *   GET /api/loadtest
-     *   GET /api/loadtest?targetDurationMs=500&cpuWorkMs=50
-     *   GET /api/loadtest?softLimit=10&degradationFactor=1.5
+     * Executes a load test request with configurable work duration.
      */
     public static function execute(): void
     {
         $request = [];
         
-        // Parse the 5 tunable parameters
-        $intParams = ['targetDurationMs', 'memorySizeKb', 'cpuWorkMs', 'softLimit', 'baselineDelayMs'];
-        foreach ($intParams as $param) {
-            if (isset($_GET[$param]) && is_numeric($_GET[$param])) {
-                $request[$param] = (int) $_GET[$param];
-            }
+        // Parse parameters
+        if (isset($_GET['workMs']) && is_numeric($_GET['workMs'])) {
+            $request['workMs'] = (int) $_GET['workMs'];
         }
-
-        // Parse float parameter
-        if (isset($_GET['degradationFactor']) && is_numeric($_GET['degradationFactor'])) {
-            $request['degradationFactor'] = (float) $_GET['degradationFactor'];
+        if (isset($_GET['memoryKb']) && is_numeric($_GET['memoryKb'])) {
+            $request['memoryKb'] = (int) $_GET['memoryKb'];
+        }
+        
+        // Legacy parameter support
+        if (isset($_GET['targetDurationMs']) && is_numeric($_GET['targetDurationMs'])) {
+            $request['targetDurationMs'] = (int) $_GET['targetDurationMs'];
+        }
+        if (isset($_GET['memorySizeKb']) && is_numeric($_GET['memorySizeKb'])) {
+            $request['memorySizeKb'] = (int) $_GET['memorySizeKb'];
         }
 
         try {
@@ -73,7 +69,7 @@ class LoadTestController
 
     /**
      * GET /api/loadtest/stats
-     * Returns current load test statistics without performing work.
+     * Returns current FPM worker statistics.
      */
     public static function stats(): void
     {
@@ -81,3 +77,4 @@ class LoadTestController
         echo json_encode($stats);
     }
 }
+
