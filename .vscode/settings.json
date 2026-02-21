@@ -10,7 +10,6 @@
         ".specify/scripts/bash/": true,
         ".specify/scripts/powershell/": true
     },
-    "php.validate.executablePath": "C:\\tools\\php84",
-    "chat.agent.maxRequests": 1000
+    "php.validate.executablePath": "C:\\tools\\php84"
 }
 
