@@ -10,7 +10,6 @@
  *   GET /api/admin/events          → Recent event log entries (with limit parameter)
  *   GET /api/admin/memory-debug    → Memory diagnostic info (cgroup, OS, process)
  *   GET /api/admin/system-info     → System info (CPU count, PHP version, platform)
- *   GET /api/admin/telemetry-status → Application Insights status
  *
  * @module src/Controllers/AdminController.php
  */
@@ -25,7 +24,6 @@ use PerfSimPhp\Services\SimulationTrackerService;
 use PerfSimPhp\Services\EventLogService;
 use PerfSimPhp\Services\MetricsService;
 use PerfSimPhp\Services\BlockingService;
-use PerfSimPhp\Services\TelemetryService;
 
 class AdminController
 {
@@ -203,59 +201,6 @@ class AdminController
             'websiteHostname' => getenv('WEBSITE_HOSTNAME') ?: null,
             'websiteSku' => getenv('WEBSITE_SKU') ?: null,
             'extensions' => get_loaded_extensions(),
-        ]);
-    }
-
-    /**
-     * GET /api/admin/telemetry-status
-     * Returns Application Insights telemetry configuration status.
-     */
-    public static function telemetryStatus(): void
-    {
-        $status = TelemetryService::getStatus();
-
-        echo json_encode([
-            'applicationInsights' => [
-                'initialized' => $status['initialized'],
-                'enabled' => $status['enabled'],
-                'connectionStringConfigured' => $status['connectionStringConfigured'],
-                'serviceName' => $status['serviceName'],
-                'pendingItems' => $status['pendingItems'],
-                'lastError' => $status['lastError'],
-            ],
-            'configuration' => [
-                'connectionStringVar' => 'APPLICATIONINSIGHTS_CONNECTION_STRING',
-                'serviceNameVar' => 'OTEL_SERVICE_NAME',
-            ],
-            'help' => $status['enabled']
-                ? 'Telemetry is active. Check Application Insights in 2-5 minutes for data.'
-                : ($status['connectionStringConfigured']
-                    ? 'Connection string found but initialization failed. Check lastError.'
-                    : 'Set APPLICATIONINSIGHTS_CONNECTION_STRING in App Settings to enable.'),
-        ]);
-    }
-
-    /**
-     * POST /api/admin/telemetry-test
-     * Sends a test telemetry event and returns the actual HTTP response.
-     * Use this to debug why telemetry isn't appearing in Application Insights.
-     */
-    public static function telemetryTest(): void
-    {
-        $result = TelemetryService::sendTestTelemetry();
-
-        echo json_encode([
-            'test' => 'TelemetryTestEvent',
-            'success' => $result['success'],
-            'statusCode' => $result['statusCode'],
-            'response' => $result['response'],
-            'responseHeaders' => $result['responseHeaders'] ?? [],
-            'error' => $result['error'],
-            'endpoint' => $result['endpoint'],
-            'payloadSent' => json_decode($result['payload'], true),
-            'help' => $result['success']
-                ? 'Test event sent successfully. Check Application Insights > Events in 2-5 minutes.'
-                : 'Failed to send telemetry. Check error and response for details.',
         ]);
     }
 }

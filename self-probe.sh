@@ -10,7 +10,6 @@
 #   This script runs in the background and periodically curls the app's PUBLIC URL,
 #   generating traffic that flows through Azure's load balancer and shows up in:
 #     - Azure AppLens
-#     - Application Insights (if enabled)
 #     - Azure Monitor metrics
 #
 # USAGE:

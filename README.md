@@ -105,25 +105,7 @@ workers/
 
 For detailed deployment with GitHub Actions and OIDC, see the [Azure Deployment Guide](public/azure-deployment.html).
 
-## � Application Insights (Optional)
-
-PHP requires manual configuration for Application Insights telemetry. Add these App Settings:
-
-| Setting | Required | Description |
-|---------|----------|-------------|
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | **Yes** | Connection string from your Application Insights resource |
-| `OTEL_SERVICE_NAME` | No | Custom service name (defaults to `PerfSimPhp`) |
-
-**To get the connection string:**
-1. Create an Application Insights resource in Azure Portal
-2. Go to **Overview** → copy the **Connection String**
-3. Add it as an App Setting in your App Service
-
-When not configured, the app runs normally with telemetry disabled (zero overhead).
-
-See [Enabling Application Insights for PHP](public/azure-diagnostics.html#enable-app-insights) for detailed setup instructions.
-
-## �📊 Dashboard
+## 📊 Dashboard
 
 The real-time dashboard displays:
 
@@ -218,7 +200,6 @@ PHP-FPM master automatically respawns crashed workers.
 | `/api/admin/events` | GET | Recent event log entries |
 | `/api/admin/system-info` | GET | System info (CPU, PHP, platform) |
 | `/api/admin/memory-debug` | GET | Memory diagnostic info |
-| `/api/admin/telemetry-status` | GET | Application Insights status |
 
 ### Load Testing
 
@@ -258,7 +239,6 @@ For comprehensive guidance on diagnosing PHP performance issues, see the built-i
 ### Key Azure Tools
 
 - **App Service Diagnostics** — CPU drill-down, memory analysis, application crashes
-- **Application Insights** — Performance metrics, failures, live metrics stream
 - **Kudu Console** — SSH access, process explorer, log stream
 - **Log Analytics** — KQL queries for deep analysis
 
@@ -325,6 +305,6 @@ This project is for educational and training purposes. Created by [SpecKit](http
 
 - [Azure App Service Documentation](https://docs.microsoft.com/azure/app-service/)
 - [PHP on Azure App Service](https://docs.microsoft.com/azure/app-service/configure-language-php)
-- [Application Insights for PHP](https://docs.microsoft.com/azure/azure-monitor/app/app-insights-overview)
+
 
 
