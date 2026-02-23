@@ -483,7 +483,7 @@ const chartConfig = {
   },
   elements: {
     point: { radius: 0, hoverRadius: 0 },
-    line: { tension: 0.3, borderWidth: 2 },
+    line: { tension: 0.3, borderWidth: 1 },
   },
 };
 
