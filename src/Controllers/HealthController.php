@@ -35,6 +35,12 @@ class HealthController
         // Run startup cleanup (idempotent - only runs once after boot)
         self::runStartupCleanup();
         
+        // Get PAGE_FOOTER from environment (allows HTML links)
+        $pageFooter = getenv('PAGE_FOOTER');
+        if ($pageFooter === false || $pageFooter === '') {
+            $pageFooter = $_SERVER['PAGE_FOOTER'] ?? $_ENV['PAGE_FOOTER'] ?? null;
+        }
+        
         return [
             'status' => 'healthy',
             'timestamp' => date('c'),
@@ -42,6 +48,7 @@ class HealthController
             'buildTimestamp' => Config::buildTimestamp(),
             'runtime' => 'PHP ' . PHP_VERSION,
             'environment' => self::environment(),
+            'pageFooter' => $pageFooter ?: null,
         ];
     }
 

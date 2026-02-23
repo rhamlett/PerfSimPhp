@@ -559,11 +559,11 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000
 
   <footer>
     <p>Performance Problem Simulator &mdash; Educational Tool for Azure App Service Diagnostics</p>
-    <p>Created by <a href="https://speckit.org/" target="_blank">SpecKit</a> in collaboration with <a href="mailto:rhamlett@microsoft.com">Richard Hamlett</a></p>
+    <p id="page-footer"></p>
     <p id="build-info">Build: Loading...</p>
   </footer>
   <script>
-    // Load environment info for SKU badge
+    // Load environment info for SKU badge and footer
     fetch('/api/health')
       .then(r => r.json())
       .then(data => {
@@ -573,6 +573,15 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000
         const buildInfo = document.getElementById('build-info');
         if (buildInfo && data.buildTimestamp) {
           buildInfo.textContent = 'Build: ' + data.buildTimestamp;
+        }
+        // Load page footer from PAGE_FOOTER env var (allows HTML links)
+        const pageFooter = document.getElementById('page-footer');
+        if (pageFooter) {
+          if (data.pageFooter) {
+            pageFooter.innerHTML = data.pageFooter;
+          } else {
+            pageFooter.style.display = 'none';
+          }
         }
       })
       .catch(() => {});

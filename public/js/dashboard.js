@@ -815,6 +815,17 @@ async function loadBuildInfo() {
       if (sidebarFooter && data.buildTimestamp) {
         sidebarFooter.textContent = `Build: ${data.buildTimestamp}`;
       }
+
+      // Update page footer from PAGE_FOOTER env var (allows HTML links)
+      const pageFooter = document.getElementById('page-footer');
+      if (pageFooter) {
+        if (data.pageFooter) {
+          pageFooter.innerHTML = data.pageFooter;
+          pageFooter.style.display = '';
+        } else {
+          pageFooter.style.display = 'none';
+        }
+      }
     }
   } catch (err) {
     console.warn('Failed to load build info:', err);

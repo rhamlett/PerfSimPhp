@@ -556,6 +556,34 @@ echo "AZURE_TENANT_ID=$TENANT_ID"
 echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
     </section>
 
+    <section id="optional-config" class="card">
+      <h2>Optional Configuration</h2>
+      <p>These optional App Service application settings customize the application's behavior.</p>
+
+      <h3>PAGE_FOOTER</h3>
+      <p>Customize the page footer text displayed on all pages. Supports HTML for links.</p>
+      <table>
+        <tr><th>Setting</th><th>Value</th></tr>
+        <tr><td><code>PAGE_FOOTER</code></td><td>HTML string (e.g., <code>Created by &lt;a href="..."&gt;Name&lt;/a&gt;</code>)</td></tr>
+      </table>
+      <p><strong>Example value:</strong></p>
+      <pre><code>Created by &lt;a href="https://speckit.org/" target="_blank"&gt;SpecKit&lt;/a&gt; and &lt;a href="https://github.com/copilot" target="_blank"&gt;Github Copilot&lt;/a&gt; in collaboration with &lt;a href="mailto:rhamlett@microsoft.com"&gt;Richard Hamlett&lt;/a&gt;</code></pre>
+      <p><strong>Set via Azure Portal:</strong></p>
+      <ol>
+        <li>Go to your App Service &rarr; <strong>Configuration</strong> &rarr; <strong>Application settings</strong></li>
+        <li>Click <strong>+ New application setting</strong></li>
+        <li>Name: <code>PAGE_FOOTER</code></li>
+        <li>Value: Your HTML string</li>
+        <li>Click <strong>OK</strong>, then <strong>Save</strong></li>
+      </ol>
+      <p><strong>Set via CLI:</strong></p>
+      <pre><code>az webapp config appsettings set \
+  --name $APP_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --settings PAGE_FOOTER='Created by &lt;a href="https://speckit.org/"&gt;SpecKit&lt;/a&gt;'</code></pre>
+      <p>If not set, the footer displays only the application description and build timestamp.</p>
+    </section>
+
   </main>
 
   <!-- Right Sidebar: On This Page -->
@@ -578,6 +606,7 @@ echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
       <ul class="sidebar-links" id="page-nav-ref">
         <li><a href="#troubleshooting">🚨 Troubleshooting</a></li>
         <li><a href="#quick-reference">📋 Quick Reference</a></li>
+        <li><a href="#optional-config">⚙️ Optional Config</a></li>
       </ul>
     </div>
   </aside>
@@ -585,12 +614,12 @@ echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
 
   <footer>
     <p>Performance Problem Simulator &mdash; Educational Tool for Azure App Service Diagnostics</p>
-    <p>Created by <a href="https://speckit.org/" target="_blank">SpecKit</a> in collaboration with <a href="mailto:rhamlett@microsoft.com">Richard Hamlett</a></p>
+    <p id="page-footer"></p>
     <p id="build-info">Build: Loading...</p>
   </footer>
 
   <script>
-    // Load environment info for SKU badge
+    // Load environment info for SKU badge and footer
     fetch('/api/health')
       .then(r => r.json())
       .then(data => {
@@ -600,6 +629,15 @@ echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
         const buildInfo = document.getElementById('build-info');
         if (buildInfo && data.buildTimestamp) {
           buildInfo.textContent = 'Build: ' + data.buildTimestamp;
+        }
+        // Load page footer from PAGE_FOOTER env var (allows HTML links)
+        const pageFooter = document.getElementById('page-footer');
+        if (pageFooter) {
+          if (data.pageFooter) {
+            pageFooter.innerHTML = data.pageFooter;
+          } else {
+            pageFooter.style.display = 'none';
+          }
         }
       })
       .catch(() => {});
