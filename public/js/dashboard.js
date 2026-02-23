@@ -393,7 +393,7 @@ function updateActiveSimulations(simulations) {
   // Build simplified state for comparison (only fields that affect display)
   const displayState = {
     cpuActive: !!simulations.cpu?.active,
-    cpuLoad: simulations.cpu?.targetLoad || 0,
+    cpuLevel: simulations.cpu?.level || '',
     memActive: !!simulations.memory?.active,
     memMb: Math.round(simulations.memory?.allocatedMb || 0),
     blockingActive: !!simulations.blocking?.active,
@@ -414,10 +414,13 @@ function updateActiveSimulations(simulations) {
   const activeSims = [];
 
   if (simulations.cpu?.active) {
+    const levelLabel = simulations.cpu.level ? 
+      simulations.cpu.level.charAt(0).toUpperCase() + simulations.cpu.level.slice(1) : 
+      'Active';
     activeSims.push({
       type: 'cpu',
       label: 'CPU Stress',
-      detail: `${simulations.cpu.targetLoad || 0}% load`,
+      detail: `${levelLabel}`,
       icon: '🔥',
     });
   }
@@ -471,20 +474,21 @@ function updateActiveSimulations(simulations) {
  * Starts CPU stress simulation.
  * Spawns background PHP processes that consume CPU.
  *
- * @param {number} targetLoadPercent - Target CPU load (1-100)
+ * @param {string} level - Intensity level ('moderate' or 'high')
  * @param {number} durationSeconds - Duration in seconds (1-300)
  */
-async function startCpuStress(targetLoadPercent, durationSeconds) {
+async function startCpuStress(level, durationSeconds) {
   try {
-    addEventToLog({ level: 'info', message: `Starting CPU stress: ${targetLoadPercent}% for ${durationSeconds}s...` });
+    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
+    addEventToLog({ level: 'info', message: `Starting CPU stress: ${levelLabel} for ${durationSeconds}s...` });
     const response = await fetch('/api/simulations/cpu/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetLoadPercent, durationSeconds }),
+      body: JSON.stringify({ level, durationSeconds }),
     });
     const data = await response.json();
     if (response.ok) {
-      addEventToLog({ level: 'success', message: data.message || `CPU stress started: ${targetLoadPercent}% for ${durationSeconds}s` });
+      addEventToLog({ level: 'success', message: data.message || `CPU stress started (${levelLabel}) for ${durationSeconds}s` });
     } else {
       addEventToLog({ level: 'error', message: `CPU stress failed: ${data.error || data.message || 'Unknown error'}` });
     }
@@ -923,9 +927,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (cpuForm) {
     cpuForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const loadPercent = parseInt(document.getElementById('cpu-load')?.value || '80', 10);
+      const level = document.getElementById('cpu-level')?.value || 'high';
       const duration = parseInt(document.getElementById('cpu-duration')?.value || '30', 10);
-      startCpuStress(loadPercent, duration);
+      startCpuStress(level, duration);
     });
   }
 

@@ -79,8 +79,8 @@ class Config
     // DEFAULT SIMULATION PARAMETERS
     // =========================================================================
 
-    /** Default CPU stress target load percentage */
-    public const DEFAULT_CPU_TARGET_LOAD_PERCENT = 50;
+    /** Default CPU stress level ('moderate' or 'high') */
+    public const DEFAULT_CPU_LEVEL = 'moderate';
 
     /** Default CPU stress duration in seconds */
     public const DEFAULT_CPU_DURATION_SECONDS = 30;
@@ -101,8 +101,6 @@ class Config
     // VALIDATION LIMITS
     // =========================================================================
 
-    public const MIN_CPU_LOAD_PERCENT = 1;
-    public const MAX_CPU_LOAD_PERCENT = 100;
     public const MIN_DURATION_SECONDS = 1;
     public const MIN_MEMORY_MB = 1;
 

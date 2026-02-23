@@ -5,7 +5,7 @@
  * =============================================================================
  *
  * ENDPOINTS:
- *   POST   /api/simulations/cpu     → Start CPU stress (body: targetLoadPercent, durationSeconds)
+ *   POST   /api/simulations/cpu     → Start CPU stress (body: level, durationSeconds)
  *   DELETE /api/simulations/cpu/:id → Stop a running simulation
  *   GET    /api/simulations/cpu     → List active CPU simulations
  *
@@ -35,11 +35,12 @@ class CpuController
 
         $simulation = CpuStressService::start($params);
 
+        $levelLabel = ucfirst($params['level']);
         http_response_code(201);
         echo json_encode([
             'id' => $simulation['id'],
             'type' => $simulation['type'],
-            'message' => "CPU stress simulation started at {$params['targetLoadPercent']}% for {$params['durationSeconds']}s",
+            'message' => "CPU stress simulation started ({$levelLabel}) for {$params['durationSeconds']}s",
             'parameters' => $simulation['parameters'],
             'scheduledEndAt' => $simulation['scheduledEndAt'],
         ]);

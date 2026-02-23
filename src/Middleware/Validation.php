@@ -79,7 +79,7 @@ class Validation
     /**
      * Validates CPU stress parameters.
      *
-     * @param array|mixed $data Array containing targetLoadPercent and durationSeconds
+     * @param array|mixed $data Array containing level and durationSeconds
      * @throws ValidationException if validation fails
      */
     public static function validateCpuStressParams(mixed $data): array
@@ -88,11 +88,23 @@ class Validation
             throw new ValidationException("Invalid CPU stress parameters");
         }
 
+        $level = $data['level'] ?? null;
+        $validLevels = \PerfSimPhp\Services\CpuStressService::VALID_LEVELS;
+        
+        if ($level === null || $level === '') {
+            throw new ValidationException("level is required");
+        }
+        
+        $level = strtolower(trim((string)$level));
+        if (!in_array($level, $validLevels, true)) {
+            throw new ValidationException(
+                "level must be one of: " . implode(', ', $validLevels),
+                ['field' => 'level', 'validValues' => $validLevels, 'received' => $level]
+            );
+        }
+
         return [
-            'targetLoadPercent' => self::validateInteger(
-                $data['targetLoadPercent'] ?? null, 'targetLoadPercent',
-                Config::MIN_CPU_LOAD_PERCENT, Config::MAX_CPU_LOAD_PERCENT
-            ),
+            'level' => $level,
             'durationSeconds' => self::validateInteger(
                 $data['durationSeconds'] ?? null, 'durationSeconds',
                 Config::MIN_DURATION_SECONDS, Config::maxDurationSeconds()

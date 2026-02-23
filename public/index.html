@@ -222,24 +222,22 @@
         <!-- CPU Stress -->
         <!-- PORTING NOTE: Update CPU stress description for the target runtime's process model -->
         <div class="control-section cpu-section">
-          <h3>🔥 CPU Stress <span class="info-icon" title="Uses exec() to spawn separate background PHP processes. Each process runs 100% on a CPU core using hash_pbkdf2(). For 75% on 2 cores: spawns 1-2 processes.">ℹ️</span></h3>
+          <h3>🔥 CPU Stress <span class="info-icon" title="Uses exec() to spawn separate background PHP processes. Each process runs intensive hash operations using hash_pbkdf2().">ℹ️</span></h3>
           <p class="control-description">Spawns background PHP processes running hash_pbkdf2(). Server stays responsive — work runs in separate processes, not in the FPM worker pool.</p>
           <form id="cpu-form">
             <label>
               Duration (s):
-              <input type="number" name="durationSeconds" id="cpu-duration" value="10" min="1">
+              <input type="number" name="durationSeconds" id="cpu-duration" value="30" min="1">
             </label>
             <label>
-              Target Load:
-              <select name="targetLoadPercent" id="cpu-load" class="wide-select">
-                <option value="25">Low (~25%)</option>
-                <option value="50">Medium (~50%)</option>
-                <option value="75" selected>High (~75%)</option>
-                <option value="100">Maximum (100%)</option>
+              Intensity:
+              <select name="level" id="cpu-level" class="wide-select">
+                <option value="moderate">Moderate</option>
+                <option value="high" selected>High</option>
               </select>
             </label>
             <div class="btn-group">
-              <button type="submit" class="btn-trigger btn-cpu">🔥 Trigger High CPU</button>
+              <button type="submit" class="btn-trigger btn-cpu">🔥 Trigger CPU Stress</button>
               <button type="button" id="stop-cpu" class="btn-stop">⬛ Stop</button>
             </div>
           </form>

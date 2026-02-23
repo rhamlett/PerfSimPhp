@@ -219,14 +219,14 @@ workers/
 Content-Type: application/json
 
 {
-  "targetLoadPercent": 75,
+  "level": "high",
   "durationSeconds": 30
 }</code></pre>
 
       <h3>Parameters</h3>
       <table>
-        <tr><th>Parameter</th><th>Range</th><th>Description</th></tr>
-        <tr><td>targetLoadPercent</td><td>1-100</td><td>Target CPU usage percentage (spawns proportional workers)</td></tr>
+        <tr><th>Parameter</th><th>Values</th><th>Description</th></tr>
+        <tr><td>level</td><td>"moderate" | "high"</td><td>CPU stress intensity level</td></tr>
         <tr><td>durationSeconds</td><td>1-300</td><td>How long to run the simulation</td></tr>
       </table>
 

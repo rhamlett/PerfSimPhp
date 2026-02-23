@@ -126,10 +126,14 @@ POST /api/simulations/cpu/start
 Content-Type: application/json
 
 {
-  "targetLoadPercent": 75,
+  "level": "high",
   "durationSeconds": 30
 }
 ```
+
+**Parameters:**
+- `level` — "moderate" or "high" intensity
+- `durationSeconds` — Duration of simulation (1-300)
 
 **Why background processes?** Unlike naive CPU burning in the request thread (which blocks the FPM worker), this simulation spawns separate processes that each run `hash_pbkdf2()` in a tight loop. FPM workers stay available.
 

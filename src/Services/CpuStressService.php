@@ -10,7 +10,7 @@
  *   like Azure App Service metrics, top/htop, and Azure Monitor.
  *
  * HOW IT WORKS:
- *   1. Calculate number of worker processes: round((targetLoadPercent/100) * CPU_CORES)
+ *   1. User selects intensity level: 'moderate' or 'high'
  *   2. Launch N background PHP processes (workers/cpu-worker.php) via exec()
  *   3. Each process runs hash_pbkdf2() in a tight loop, burning 100% of one CPU core
  *   4. After durationSeconds, the worker self-terminates (or is killed manually)
@@ -40,15 +40,18 @@ class CpuStressService
 {
     private const PIDS_KEY = 'perfsim_cpu_pids';
 
+    /** Valid CPU stress levels */
+    public const VALID_LEVELS = ['moderate', 'high'];
+
     /**
      * Starts a CPU stress simulation.
      *
-     * @param array{targetLoadPercent: int, durationSeconds: int} $params
+     * @param array{level: string, durationSeconds: int} $params
      * @return array The created simulation record
      */
     public static function start(array $params): array
     {
-        $targetLoadPercent = $params['targetLoadPercent'];
+        $level = $params['level'];
         $durationSeconds = $params['durationSeconds'];
 
         // Create simulation record
@@ -59,43 +62,44 @@ class CpuStressService
         );
 
         // Calculate worker count for logging
-        $workerCount = self::calculateWorkerCount($targetLoadPercent);
+        $workerCount = self::calculateWorkerCount($level);
 
         // Log the start with worker count
+        $levelLabel = ucfirst($level);
         EventLogService::info(
             'SIMULATION_STARTED',
-            "CPU stress started: {$targetLoadPercent}% target, {$workerCount} workers, {$durationSeconds}s",
+            "CPU stress started: {$levelLabel} intensity, {$workerCount} workers, {$durationSeconds}s",
             $simulation['id'],
             'CPU_STRESS',
-            ['targetLoadPercent' => $targetLoadPercent, 'durationSeconds' => $durationSeconds, 'workers' => $workerCount]
+            ['level' => $level, 'durationSeconds' => $durationSeconds, 'workers' => $workerCount]
         );
 
         // Launch background CPU worker processes
-        self::launchWorkers($simulation['id'], $targetLoadPercent, $durationSeconds);
+        self::launchWorkers($simulation['id'], $level, $durationSeconds);
 
         return $simulation;
     }
 
     /**
-     * Calculates the number of worker processes for a given target load.
+     * Calculates the number of worker processes for a given intensity level.
+     *
+     * TUNING FOR AZURE APP SERVICE:
+     * Azure containers often see more vCPUs than actually available due to shared
+     * infrastructure. We use aggressive worker counts to compensate:
+     * - High: Maximum workers to saturate all available CPU
+     * - Moderate: Fewer workers for sustained medium load
      */
-    private static function calculateWorkerCount(int $targetLoadPercent): int
+    private static function calculateWorkerCount(string $level): int
     {
         $cpuCount = self::getCpuCount();
-        $baseWorkers = (int) ceil(($targetLoadPercent / 100) * $cpuCount);
         
-        // Multipliers tuned for Azure App Service
-        // Azure reports more cores than available, so we need extra workers
-        // but not TOO many or we overshoot
-        $multiplier = match(true) {
-            $targetLoadPercent >= 90 => 2.5,  // 90-100%: 2.5x workers
-            $targetLoadPercent >= 75 => 2.0,  // 75-89%: 2x workers  
-            $targetLoadPercent >= 50 => 1.75, // 50-74%: 1.75x workers
-            $targetLoadPercent >= 25 => 1.5,  // 25-49%: 1.5x workers
-            default => 1.25,                   // <25%: 1.25x workers
-        };
+        if ($level === 'high') {
+            // High: 3x CPU count to maximize CPU burn, cap at 16 workers
+            return min(16, max(2, $cpuCount * 3));
+        }
         
-        return min(12, max(1, (int) ceil($baseWorkers * $multiplier)));
+        // Moderate: 1.5x CPU count for medium sustained load
+        return min(8, max(1, (int) ceil($cpuCount * 1.5)));
     }
 
     /**
@@ -128,7 +132,7 @@ class CpuStressService
      * Launches background CPU worker processes.
      *
      * ALGORITHM:
-     * 1. Calculate worker count based on target load
+     * 1. Calculate worker count based on intensity level
      * 2. Launch all workers in parallel for instant ramp-up
      * 3. Store PIDs in SharedStorage for later termination
      *
@@ -138,15 +142,15 @@ class CpuStressService
      * - Workers should hit target CPU within 2-3 seconds
      *
      * @param string $simulationId Simulation ID for tracking
-     * @param int $targetLoadPercent Target CPU load percentage (1-100)
+     * @param string $level Intensity level ('moderate' or 'high')
      * @param int $durationSeconds Duration for each worker
      */
     private static function launchWorkers(
         string $simulationId,
-        int $targetLoadPercent,
+        string $level,
         int $durationSeconds
     ): void {
-        $numProcesses = self::calculateWorkerCount($targetLoadPercent);
+        $numProcesses = self::calculateWorkerCount($level);
         $cpuCount = self::getCpuCount();
 
         $workerScript = dirname(__DIR__, 2) . '/workers/cpu-worker.php';
@@ -161,7 +165,7 @@ class CpuStressService
             return $allPids;
         }, []);
 
-        error_log("[CPU Stress] Launched {$numProcesses} workers (target={$targetLoadPercent}%, cpus={$cpuCount}): PIDs=" . implode(',', $pids));
+        error_log("[CPU Stress] Launched {$numProcesses} workers (level={$level}, cpus={$cpuCount}): PIDs=" . implode(',', $pids));
     }
 
     /**

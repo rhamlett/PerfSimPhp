@@ -73,9 +73,13 @@ class MetricsService
         // CPU stress simulations (getActiveSimulationsByType uses read-only fast path)
         $cpuSims = SimulationTrackerService::getActiveSimulationsByType('CPU_STRESS');
         $cpuActive = count($cpuSims) > 0;
-        $cpuTargetLoad = 0;
+        $cpuLevel = '';
         foreach ($cpuSims as $sim) {
-            $cpuTargetLoad = max($cpuTargetLoad, $sim['parameters']['targetLoadPercent'] ?? 0);
+            // If any sim is 'high', report high; otherwise report the level found
+            $simLevel = $sim['parameters']['level'] ?? '';
+            if ($simLevel === 'high' || $cpuLevel === '') {
+                $cpuLevel = $simLevel;
+            }
         }
 
         // Memory pressure simulations
@@ -91,7 +95,7 @@ class MetricsService
         return [
             'cpu' => [
                 'active' => $cpuActive,
-                'targetLoad' => $cpuTargetLoad,
+                'level' => $cpuLevel,
                 'count' => count($cpuSims),
             ],
             'memory' => [
