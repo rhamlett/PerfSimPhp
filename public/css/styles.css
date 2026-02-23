@@ -615,6 +615,11 @@ section h2, section h3 {
   border-radius: 2px;
 }
 
+.legend-color-cpu { background: var(--color-cpu); }
+.legend-color-memory { background: var(--color-memory); }
+.legend-color-workers { background: var(--color-eventloop); }
+.legend-color-rss { background: var(--color-latency); }
+
 .chart-card canvas {
   width: 100% !important;
   height: 160px !important;
@@ -682,6 +687,18 @@ section h2, section h3 {
   font-size: 0.8rem;
   color: var(--color-text-muted);
   margin-bottom: 0.5rem;
+}
+
+.latency-description-note {
+  margin-top: 0.25rem;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* Diagnostic steps in alert boxes */
+.diagnostic-steps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
 }
 
 .latency-stats {

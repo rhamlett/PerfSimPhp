@@ -273,7 +273,7 @@
       </a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">External</div>
-      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" class="sidebar-nav-item">
+      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" rel="noopener" class="sidebar-nav-item">
         <span class="nav-icon">🐙</span>
         <span class="nav-label">GitHub Repository<span class="nav-desc">Source code & issues</span></span>
       </a>
@@ -583,7 +583,7 @@
       <h3>Step 3: Deep Dive Tools by Issue</h3>
       <div class="alert-box success">
         <strong>🔥 High CPU</strong>
-        <ol style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+        <ol class="diagnostic-steps">
           <li>Kudu Process Explorer &rarr; Identify which PHP processes consume CPU</li>
           <li>App Service Diagnostics &rarr; CPU Drill Down</li>
           <li>Profile with Xdebug cachegrind or Blackfire</li>
@@ -591,7 +591,7 @@
       </div>
       <div class="alert-box success">
         <strong>🧵 Request Thread Blocking (FPM Pool Exhaustion)</strong>
-        <ol style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+        <ol class="diagnostic-steps">
           <li>Check PHP-FPM status page for active/idle worker counts</li>
           <li>Review FPM slow log for requests exceeding threshold</li>
           <li>Look for blocking operations: <code>sleep()</code>, <code>file_get_contents()</code> on slow URLs, unoptimized queries</li>
@@ -599,7 +599,7 @@
       </div>
       <div class="alert-box success">
         <strong>📊 Memory Leak</strong>
-        <ol style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+        <ol class="diagnostic-steps">
           <li>Check APCu usage via <code>apcu_cache_info()</code></li>
           <li>Monitor per-worker RSS with <code>ps aux | grep php-fpm</code></li>
           <li>Enable Xdebug memory profiling to track allocations</li>
@@ -788,7 +788,7 @@ script_filename = /home/site/wwwroot/public/index.php
 
       <div class="alert-box info">
         <strong>💡 Quick Reference</strong>
-        <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+        <ul class="diagnostic-steps">
           <li><strong>CPU slow?</strong> &rarr; Use Xdebug cachegrind or Blackfire to find hot functions</li>
           <li><strong>Memory growing?</strong> &rarr; Check APCu usage and per-worker RSS; use <code>memory_get_usage()</code></li>
           <li><strong>Workers blocked?</strong> &rarr; Enable FPM slow log to capture stack traces of blocking requests</li>

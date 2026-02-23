@@ -123,7 +123,6 @@ function onConnected() {
     statusEl.textContent = 'Connected';
     statusEl.className = 'status-connected';
   }
-  console.log('[Polling] Connected to server');
 
   // Start polling loops
   startMetricsPolling();
@@ -272,7 +271,6 @@ function startEventsPolling() {
  * Clears the log display for a fresh start, then adds connection events.
  */
 function initializeEventLog() {
-  console.log('[polling-client] Initializing event log...');
   fetchWithTimeout('/api/admin/events?limit=50', { cache: 'no-store' }, EVENTS_TIMEOUT_MS)
     .then(response => {
       if (!response.ok) throw new Error('Events fetch failed');
@@ -282,7 +280,6 @@ function initializeEventLog() {
       // Use sequence number for change detection (survives ring buffer eviction)
       lastEventSequence = data.sequence || 0;
       lastEventCount = data.total || data.count || (data.events || []).length;
-      console.log('[polling-client] Event log initialized, sequence:', lastEventSequence, 'count:', lastEventCount);
       
       // Clear event log state (both JS state and DOM) to start fresh
       if (typeof window.clearEventLog === 'function') {
@@ -317,19 +314,12 @@ function pollEventsOnce() {
       const newSequence = data.sequence || 0;
       const newTotal = data.total || data.count || events.length;
 
-      // Debug logging for event detection
-      if (newSequence !== lastEventSequence) {
-        console.log('[polling-client] Sequence changed:', lastEventSequence, '->', newSequence, 'events:', events.length);
-      }
-
       // Detect new events using monotonic sequence number
       if (newSequence > lastEventSequence && lastEventSequence > 0) {
         // Calculate how many new events arrived
         const newEventsCount = newSequence - lastEventSequence;
-        console.log('[polling-client] New events detected:', newEventsCount);
         // Events are newest-first from the API, so take the first N (but no more than available)
         const eventsToShow = events.slice(0, Math.min(newEventsCount, events.length));
-        console.log('[polling-client] Dispatching events:', eventsToShow.map(e => e.event || e.message));
         // Dispatch in chronological order (reverse since API returns newest-first)
         for (let i = eventsToShow.length - 1; i >= 0; i--) {
           if (typeof onEventUpdate === 'function') {
@@ -338,7 +328,6 @@ function pollEventsOnce() {
         }
       } else if (newSequence > 0 && lastEventSequence === 0) {
         // Edge case: first poll after init with no prior events - show recent events
-        console.log('[polling-client] Initial events load, showing recent:', Math.min(5, events.length));
         const recentEvents = events.slice(0, 5);
         for (let i = recentEvents.length - 1; i >= 0; i--) {
           if (typeof onEventUpdate === 'function') {
@@ -368,8 +357,6 @@ let probeInFlight = false;
  */
 function startProbePolling() {
   if (probePollTimer) clearInterval(probePollTimer);
-
-  console.log('[polling-client] Starting probe polling (100ms interval)');
   
   probeInFlight = false;
   probeOnce();

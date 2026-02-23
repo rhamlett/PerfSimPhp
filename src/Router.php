@@ -15,7 +15,7 @@
  *   GET    /api/health/probe      → HealthController::probe
  *   GET    /api/metrics           → MetricsController::index
  *   GET    /api/metrics/probe     → MetricsController::probe
- *   GET    /api/metrics/internal-probes → MetricsController::internalProbes
+ *   GET    /api/metrics/internal-probe → MetricsController::internalProbe
  *   POST   /api/simulations/cpu   → CpuController::start
  *   DELETE /api/simulations/cpu/:id → CpuController::stop
  *   GET    /api/simulations/cpu   → CpuController::list
@@ -113,9 +113,6 @@ class Router
         }
         if ($method === 'GET' && $path === '/api/metrics/internal-probe') {
             return self::ok(MetricsController::internalProbe());
-        }
-        if ($method === 'GET' && $path === '/api/metrics/internal-probes') {
-            return self::ok(MetricsController::internalProbes());
         }
 
         // CPU simulation endpoints
