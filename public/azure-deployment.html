@@ -3,18 +3,107 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- PORTING NOTE: Update title and branding for target runtime -->
   <title>Azure Deployment Guide - PerfSimPhp</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/css/styles.css">
   <style>
-    .deploy-container {
-      max-width: 1100px;
+    /* Doc Layout - Main + TOC Sidebar */
+    .doc-layout {
+      display: flex;
+      gap: 2rem;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 2rem;
+    }
+    .doc-main {
       flex: 1;
       min-width: 0;
     }
+    .deploy-container {
+      max-width: 900px;
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+    .doc-toc {
+      width: 280px;
+      flex-shrink: 0;
+    }
+    .doc-toc-sticky {
+      position: sticky;
+      top: 80px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    .doc-toc-card {
+      background: var(--color-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 1.25rem;
+    }
+    .doc-toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--color-bg);
+    }
+    .doc-toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .doc-toc-item {
+      margin-bottom: 0.25rem;
+    }
+    .doc-toc-item a {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      color: var(--color-text-muted);
+      font-size: 0.875rem;
+      transition: all var(--transition-fast);
+      border-left: 2px solid transparent;
+    }
+    .doc-toc-item a:hover {
+      background: rgba(92, 85, 152, 0.08);
+      color: var(--color-primary);
+      border-left-color: var(--color-primary);
+    }
+    .doc-toc-item a.active {
+      background: rgba(92, 85, 152, 0.12);
+      color: var(--color-primary);
+      font-weight: 500;
+      border-left-color: var(--color-primary);
+    }
+    .toc-icon {
+      font-size: 1rem;
+      width: 1.25rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .doc-toc-divider {
+      height: 1px;
+      background: var(--color-bg);
+      margin: 0.75rem 0;
+    }
+    .doc-toc-section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      padding: 0.5rem 0.75rem 0.25rem;
+      opacity: 0.7;
+    }
+
+    /* Page Content Styles */
     .deploy-header {
       text-align: center;
       margin-bottom: 2rem;
@@ -22,6 +111,7 @@
     .deploy-header h1 {
       color: var(--color-primary);
       margin-bottom: 0.5rem;
+      font-size: 2rem;
     }
     .deploy-header p {
       color: var(--color-text-muted);
@@ -29,14 +119,15 @@
     }
     .card {
       background: var(--color-card);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       padding: 1.5rem 2rem;
       margin-bottom: 1.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-sm);
+      scroll-margin-top: 80px;
     }
     .card h2 {
       color: var(--color-primary);
-      border-bottom: 2px solid #edebe9;
+      border-bottom: 2px solid var(--color-bg);
       padding-bottom: 0.5rem;
       margin-bottom: 1rem;
     }
@@ -52,6 +143,7 @@
     }
     .card p, .card li {
       line-height: 1.6;
+      color: var(--color-text-muted);
     }
     .card ul, .card ol {
       margin: 0.5rem 0 1rem 1.5rem;
@@ -62,21 +154,25 @@
     pre {
       background: #1e1e1e;
       color: #d4d4d4;
-      border-radius: 6px;
+      border-radius: var(--radius-md);
       padding: 1rem;
       overflow-x: auto;
       font-size: 0.85rem;
       margin: 1rem 0;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
     }
     code {
       background: rgba(0,0,0,0.05);
       padding: 0.2rem 0.4rem;
-      border-radius: 3px;
+      border-radius: var(--radius-sm);
       font-size: 0.9em;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      color: var(--color-danger);
     }
     pre code {
       background: none;
       padding: 0;
+      color: inherit;
     }
     table {
       width: 100%;
@@ -85,28 +181,31 @@
       font-size: 0.9rem;
     }
     th, td {
-      border: 1px solid #edebe9;
+      border: 1px solid var(--color-bg);
       padding: 0.75rem;
       text-align: left;
     }
     th {
       background: var(--color-bg);
       font-weight: 600;
+      color: var(--color-text);
     }
     .info-box {
-      background: #e6f3ff;
-      border-left: 4px solid #0078d4;
+      background: rgba(0, 120, 212, 0.1);
+      border-left: 4px solid var(--color-cpu);
       padding: 1rem;
       margin: 1rem 0;
-      border-radius: 0 6px 6px 0;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
     }
+    .info-box p { margin: 0; color: var(--color-text); }
     .warning-box {
-      background: #fff4ce;
-      border-left: 4px solid #ff8c00;
+      background: rgba(255, 185, 0, 0.15);
+      border-left: 4px solid var(--color-warning);
       padding: 1rem;
       margin: 1rem 0;
-      border-radius: 0 6px 6px 0;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
     }
+    .warning-box p { margin: 0; color: var(--color-text); }
     .step-number {
       display: inline-block;
       width: 28px;
@@ -120,8 +219,52 @@
       margin-right: 0.5rem;
     }
     .secrets-table td:first-child {
-      font-family: monospace;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
       font-weight: 600;
+    }
+
+    @media (max-width: 1024px) {
+      .doc-layout {
+        flex-direction: column;
+      }
+      .doc-toc {
+        width: 100%;
+        order: -1;
+      }
+      .doc-toc-sticky {
+        position: relative;
+        top: 0;
+        max-height: none;
+      }
+      .doc-toc ul {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .doc-toc-item {
+        margin-bottom: 0;
+      }
+      .doc-toc-item a {
+        padding: 0.375rem 0.625rem;
+        border-left: none;
+        border-radius: var(--radius-md);
+        background: var(--color-bg);
+      }
+      .doc-toc-divider,
+      .doc-toc-section-label {
+        display: none;
+      }
+    }
+    @media (max-width: 768px) {
+      .doc-layout {
+        padding: 1rem;
+      }
+      table {
+        font-size: 0.8rem;
+      }
+      th, td {
+        padding: 0.5rem;
+      }
     }
   </style>
 </head>
@@ -132,10 +275,10 @@
       <span></span>
       <span></span>
     </button>
-    <h1>� Azure Deployment Guide</h1>
+    <h1>&#x1F680; Azure Deployment Guide</h1>
     <span id="sku-badge" class="sku-badge">SKU: Local</span>
     <nav>
-      <a href="/" class="btn-panel-toggle">🎮 Dashboard</a>
+      <a href="/" class="btn-panel-toggle">&#x1F3AE; Dashboard</a>
     </nav>
   </header>
 
@@ -143,46 +286,46 @@
   <div id="sidebar-overlay" class="sidebar-overlay"></div>
   <aside id="sidebar-drawer" class="sidebar-drawer">
     <div class="sidebar-header">
-      <h2>🐘 PerfSimPhp</h2>
+      <h2>&#x1F418; PerfSimPhp</h2>
       <button id="sidebar-close" class="sidebar-close" aria-label="Close navigation">&times;</button>
     </div>
     <nav class="sidebar-nav">
       <div class="sidebar-section-label">Application</div>
       <a href="/" class="sidebar-nav-item">
-        <span class="nav-icon">🎮</span>
-        <span class="nav-label">Dashboard<span class="nav-desc">Live metrics & controls</span></span>
+        <span class="nav-icon">&#x1F3AE;</span>
+        <span class="nav-label">Dashboard<span class="nav-desc">Live metrics &amp; controls</span></span>
       </a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">Documentation</div>
       <a href="/docs.html" class="sidebar-nav-item">
-        <span class="nav-icon">📚</span>
-        <span class="nav-label">Documentation<span class="nav-desc">API reference & guides</span></span>
+        <span class="nav-icon">&#x1F4DA;</span>
+        <span class="nav-label">Documentation<span class="nav-desc">API reference &amp; guides</span></span>
       </a>
       <a href="/azure-diagnostics.html" class="sidebar-nav-item">
-        <span class="nav-icon">☁️</span>
+        <span class="nav-icon">&#x2601;&#xFE0F;</span>
         <span class="nav-label">Azure Diagnostics<span class="nav-desc">Diagnose issues in App Service</span></span>
       </a>
       <a href="/azure-deployment.html" class="sidebar-nav-item active">
-        <span class="nav-icon">🚀</span>
+        <span class="nav-icon">&#x1F680;</span>
         <span class="nav-label">Deploy to Azure<span class="nav-desc">GitHub Actions + OIDC setup</span></span>
       </a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">External</div>
-      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" rel="noopener" class="sidebar-nav-item">
-        <span class="nav-icon">🐙</span>
-        <span class="nav-label">GitHub Repository<span class="nav-desc">Source code & issues</span></span>
+      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" class="sidebar-nav-item">
+        <span class="nav-icon">&#x1F419;</span>
+        <span class="nav-label">GitHub Repository<span class="nav-desc">Source code &amp; issues</span></span>
       </a>
     </nav>
     <div class="sidebar-footer">
-      Performance Problem Simulator
+      PerfSimPhp v1.0 &bull; PHP 8.4
     </div>
   </aside>
 
-  <div class="docs-page-wrapper">
-  <main class="deploy-container">
+  <div class="doc-layout">
+    <div class="doc-main">
+    <main class="deploy-container">
     <div class="deploy-header">
-      <h1>🚀 Azure Deployment Guide</h1>
-      <!-- PORTING NOTE: Update description for target runtime -->
+      <h1>&#x1F680; Azure Deployment Guide</h1>
       <p>Deploy PerfSimPhp to Azure App Service using GitHub Actions with OIDC authentication</p>
     </div>
 
@@ -215,13 +358,12 @@
       <ol>
         <li><strong>Navigate to App Services</strong>
           <ul>
-            <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener">Azure Portal</a></li>
+            <li>Go to <a href="https://portal.azure.com" target="_blank">Azure Portal</a></li>
             <li>Search for "App Services" and select it</li>
             <li>Click <strong>+ Create</strong></li>
           </ul>
         </li>
         <li><strong>Configure Basics</strong>
-          <!-- PORTING NOTE: Update runtime stack and name for target runtime -->
           <table>
             <tr><th>Setting</th><th>Value</th></tr>
             <tr><td>Subscription</td><td>Your subscription</td></tr>
@@ -239,15 +381,13 @@
             <tr><td>SKU</td><td><strong>Basic B1</strong> or higher</td></tr>
           </table>
           <div class="info-box">
-            <!-- PORTING NOTE: PHP uses AJAX polling, not WebSockets. Free tier note updated. -->
-            <strong>💡 Note:</strong> PerfSimPhp uses AJAX polling (no WebSocket required), so the Free (F1) tier works. However, Basic B1 or higher is recommended for better performance and SSH access.
+            <p><strong>&#x1F4A1; Note:</strong> PerfSimPhp uses AJAX polling (no WebSocket required), so the Free (F1) tier works. However, Basic B1 or higher is recommended for better performance and SSH access.</p>
           </div>
         </li>
         <li><strong>Review and Create</strong> &mdash; Click through to create the resource</li>
       </ol>
 
       <h3>Option B: Azure CLI</h3>
-      <!-- PORTING NOTE: Update CLI commands for target runtime -->
       <pre><code># Login to Azure
 az login
 
@@ -260,7 +400,7 @@ APP_SERVICE_PLAN="perfsimphp-plan"
 # Create resource group
 az group create --name $RESOURCE_GROUP --location $LOCATION
 
-# Create App Service Plan
+# Create App Service Plan (B1 recommended)
 az appservice plan create \
   --name $APP_SERVICE_PLAN \
   --resource-group $RESOURCE_GROUP \
@@ -274,27 +414,6 @@ az webapp create \
   --resource-group $RESOURCE_GROUP \
   --plan $APP_SERVICE_PLAN \
   --runtime "PHP:8.4"</code></pre>
-
-      <!-- PORTING NOTE: PHP doesn't need WebSocket config. Instead, configure Nginx and PHP settings. -->
-      <h3>Configure PHP Settings</h3>
-      <p>After creation, configure PHP-specific settings:</p>
-      <ol>
-        <li>Go to your App Service &rarr; <strong>Configuration</strong> &rarr; <strong>General settings</strong></li>
-        <li>Verify the <strong>Startup Command</strong> is empty (uses default Nginx + PHP-FPM)</li>
-        <li>Optionally set <strong>Startup Command</strong> to a custom script if needed</li>
-      </ol>
-      <p>Or via CLI:</p>
-      <pre><code># Set document root to public/ so Nginx serves from the correct directory
-az webapp config set \
-  --name $APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --linux-fx-version "PHP|8.4"
-
-# Set the document root (important for front controller pattern)
-az webapp config appsettings set \
-  --name $APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --settings WEBSITES_ENABLE_APP_SERVICE_STORAGE=true</code></pre>
     </section>
 
     <section id="app-registration" class="card">
@@ -305,7 +424,7 @@ az webapp config appsettings set \
       <ol>
         <li><strong>Navigate to App Registrations</strong>
           <ul>
-            <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener">Azure Portal</a></li>
+            <li>Go to <a href="https://portal.azure.com" target="_blank">Azure Portal</a></li>
             <li>Search for "App registrations" and select it</li>
             <li>Click <strong>+ New registration</strong></li>
           </ul>
@@ -364,7 +483,7 @@ az webapp config appsettings set \
       </ol>
 
       <div class="info-box">
-        <strong>💡 Note:</strong> If you also want to deploy from pull requests or other branches, add additional federated credentials with the appropriate entity type.
+        <p><strong>&#x1F4A1; Note:</strong> If you also want to deploy from pull requests or other branches, add additional federated credentials with the appropriate entity type.</p>
       </div>
     </section>
 
@@ -399,7 +518,7 @@ az webapp config appsettings set \
       <ol>
         <li><strong>Fork the Repository</strong>
           <ul>
-            <li>Go to the <a href="https://github.com/rhamlett/perfsimphp" target="_blank" rel="noopener">perfsimphp repository</a></li>
+            <li>Go to the <a href="https://github.com/rhamlett/perfsimphp" target="_blank">perfsimphp repository</a></li>
             <li>Click <strong>Fork</strong> to create your own copy</li>
           </ul>
         </li>
@@ -425,14 +544,13 @@ az webapp config appsettings set \
       </ol>
 
       <div class="info-box">
-        <strong>💡 No Client Secret Needed:</strong> OIDC federated credentials eliminate the need to store a client secret. The three IDs above are sufficient.
+        <p><strong>&#x1F4A1; No Client Secret Needed:</strong> OIDC federated credentials eliminate the need to store a client secret. The three IDs above are sufficient.</p>
       </div>
 
       <h3>Update Workflow (if needed)</h3>
       <p>If your App Service name is different from <code>perfsimphp</code>, edit <code>.github/workflows/deploy.yml</code>:</p>
       <pre><code>env:
-  AZURE_WEBAPP_NAME: your-app-service-name  # Change this
-  PHP_VERSION: '8.4'</code></pre>
+  AZURE_WEBAPP_NAME: your-app-service-name  # Change this</code></pre>
     </section>
 
     <section id="deploy" class="card">
@@ -455,8 +573,7 @@ git push origin main</code></pre>
       <h3>Verify Deployment</h3>
       <ol>
         <li><strong>Open the App URL</strong>: <code>https://&lt;your-app-name&gt;.azurewebsites.net</code></li>
-        <!-- PORTING NOTE: PHP uses AJAX polling, not WebSocket -->
-        <li><strong>Verify Dashboard</strong>: Real-time metrics should update via AJAX polling, status should show "Connected"</li>
+        <li><strong>Verify Dashboard</strong>: Real-time metrics should update via AJAX polling</li>
         <li><strong>Test Health Endpoint</strong>:
           <pre><code>curl https://&lt;your-app-name&gt;.azurewebsites.net/api/health</code></pre>
         </li>
@@ -465,17 +582,6 @@ git push origin main</code></pre>
 
     <section id="troubleshooting" class="card">
       <h2>Troubleshooting</h2>
-
-      <!-- PORTING NOTE: Update troubleshooting for target runtime -->
-      <h3>Dashboard Not Updating</h3>
-      <p><strong>Symptoms:</strong> Dashboard shows "Disconnected", charts don't update</p>
-      <p><strong>Solutions:</strong></p>
-      <ul>
-        <li>Check browser console for JavaScript errors</li>
-        <li>Verify <code>/api/metrics</code> endpoint returns data</li>
-        <li>Ensure Nginx is correctly routing API requests to PHP-FPM</li>
-        <li>Check PHP error logs: <code>/var/log/php/error.log</code></li>
-      </ul>
 
       <h3>OIDC Authentication Fails</h3>
       <p><strong>Symptoms:</strong> GitHub Actions fails at "Login to Azure" step</p>
@@ -491,19 +597,17 @@ git push origin main</code></pre>
       <p><strong>Check:</strong></p>
       <ul>
         <li>View Log stream in Azure Portal (App Service &rarr; Log stream)</li>
-        <li>Verify the document root is set to <code>/home/site/wwwroot/public</code></li>
-        <li>Check PHP version matches (8.4)</li>
-        <li>Verify Nginx configuration is routing correctly</li>
-        <li>Check for missing PHP extensions (APCu, etc.)</li>
+        <li>Verify PHP 8.4 runtime is selected</li>
+        <li>Check for PHP extension compatibility issues</li>
       </ul>
 
-      <h3>Shared Storage Issues</h3>
-      <p><strong>Symptoms:</strong> Simulations don't persist, metrics show zeros</p>
+      <h3>Dashboard Not Loading</h3>
+      <p><strong>Symptoms:</strong> Dashboard shows errors or doesn't poll</p>
       <p><strong>Check:</strong></p>
       <ul>
-        <li>Verify APCu extension is installed: <code>php -m | grep apcu</code></li>
-        <li>If APCu unavailable, ensure <code>storage/</code> directory is writable</li>
-        <li>Check <code>/home/site/wwwroot/storage/</code> permissions</li>
+        <li>Verify the /api/health endpoint returns successfully</li>
+        <li>Check browser console for CORS or network errors</li>
+        <li>Ensure APCu extension is available (check php -m)</li>
       </ul>
 
       <h3>View Logs</h3>
@@ -511,21 +615,43 @@ git push origin main</code></pre>
 az webapp log tail --name $APP_NAME --resource-group $RESOURCE_GROUP
 
 # View deployment logs
-az webapp log deployment show --name $APP_NAME --resource-group $RESOURCE_GROUP
+az webapp log deployment show --name $APP_NAME --resource-group $RESOURCE_GROUP</code></pre>
+    </section>
 
-# SSH into the container
-az webapp ssh --name $APP_NAME --resource-group $RESOURCE_GROUP</code></pre>
+    <section id="optional-config" class="card">
+      <h2>Optional Configuration</h2>
+      
+      <h3>Custom Footer (PAGE_FOOTER)</h3>
+      <p>You can customize the footer displayed on all pages by setting the <code>PAGE_FOOTER</code> application setting. The value supports HTML including links.</p>
+      
+      <h4>Setting via Azure Portal</h4>
+      <ol>
+        <li>Navigate to your App Service in the Azure Portal</li>
+        <li>Go to <strong>Settings &rarr; Environment variables</strong></li>
+        <li>Click <strong>+ Add</strong></li>
+        <li>Set Name: <code>PAGE_FOOTER</code></li>
+        <li>Set Value (example):
+          <pre><code>Created by &lt;a href="https://speckit.org/" target="_blank"&gt;SpecKit&lt;/a&gt; and &lt;a href="https://github.com/copilot" target="_blank"&gt;Github Copilot&lt;/a&gt; in collaboration with &lt;a href="mailto:rhamlett@microsoft.com"&gt;Richard Hamlett&lt;/a&gt;</code></pre>
+        </li>
+        <li>Click <strong>Apply</strong> and then <strong>Confirm</strong> to restart the app</li>
+      </ol>
+
+      <h4>Setting via Azure CLI</h4>
+      <pre><code># Set the PAGE_FOOTER application setting
+az webapp config appsettings set --name $APP_NAME --resource-group $RESOURCE_GROUP \
+  --settings 'PAGE_FOOTER=Created by &lt;a href="https://speckit.org/" target="_blank"&gt;SpecKit&lt;/a&gt;'</code></pre>
+
+      <p><strong>Note:</strong> If <code>PAGE_FOOTER</code> is not set, the footer will display only the app description and build timestamp.</p>
     </section>
 
     <section id="quick-reference" class="card">
-      <h2>Quick Reference &mdash; CLI One-Liner</h2>
+      <h2>Quick Reference - CLI One-Liner</h2>
       <p>Complete setup script (customize variables at top):</p>
-      <!-- PORTING NOTE: Update CLI script for target runtime -->
       <pre><code># Full setup (customize variables at top)
 RESOURCE_GROUP="perfsimphp-rg"
 APP_NAME="perfsimphp"
 LOCATION="eastus"
-GITHUB_REPO="YOUR_USERNAME/PerfSimPhp"
+GITHUB_REPO="YOUR_USERNAME/perfsimphp"
 
 # Create resources
 az group create -n $RESOURCE_GROUP -l $LOCATION
@@ -556,88 +682,80 @@ echo "AZURE_TENANT_ID=$TENANT_ID"
 echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
     </section>
 
-    <section id="optional-config" class="card">
-      <h2>Optional Configuration</h2>
-      <p>These optional App Service application settings customize the application's behavior.</p>
+    </main>
+    </div><!-- /.doc-main -->
 
-      <h3>PAGE_FOOTER</h3>
-      <p>Customize the page footer text displayed on all pages. Supports HTML for links.</p>
-      <table>
-        <tr><th>Setting</th><th>Value</th></tr>
-        <tr><td><code>PAGE_FOOTER</code></td><td>HTML string (e.g., <code>Created by &lt;a href="..."&gt;Name&lt;/a&gt;</code>)</td></tr>
-      </table>
-      <p><strong>Example value:</strong></p>
-      <pre><code>Created by &lt;a href="https://speckit.org/" target="_blank"&gt;SpecKit&lt;/a&gt; and &lt;a href="https://github.com/copilot" target="_blank"&gt;Github Copilot&lt;/a&gt; in collaboration with &lt;a href="mailto:rhamlett@microsoft.com"&gt;Richard Hamlett&lt;/a&gt;</code></pre>
-      <p><strong>Set via Azure Portal:</strong></p>
-      <ol>
-        <li>Go to your App Service &rarr; <strong>Configuration</strong> &rarr; <strong>Application settings</strong></li>
-        <li>Click <strong>+ New application setting</strong></li>
-        <li>Name: <code>PAGE_FOOTER</code></li>
-        <li>Value: Your HTML string</li>
-        <li>Click <strong>OK</strong>, then <strong>Save</strong></li>
-      </ol>
-      <p><strong>Set via CLI:</strong></p>
-      <pre><code>az webapp config appsettings set \
-  --name $APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --settings PAGE_FOOTER='Created by &lt;a href="https://speckit.org/"&gt;SpecKit&lt;/a&gt;'</code></pre>
-      <p>If not set, the footer displays only the application description and build timestamp.</p>
-    </section>
-
-  </main>
-
-  <!-- Right Sidebar: On This Page -->
-  <aside class="docs-right-sidebar">
-    <div class="sidebar-card">
-      <div class="sidebar-title">ON THIS PAGE</div>
-      <ul class="sidebar-links" id="page-nav">
-        <li><a href="#overview">🎯 Overview</a></li>
-      </ul>
-      <div class="sidebar-section-label">SETUP STEPS</div>
-      <ul class="sidebar-links" id="page-nav-steps">
-        <li><a href="#app-service">☁️ Create App Service</a></li>
-        <li><a href="#app-registration">📝 App Registration</a></li>
-        <li><a href="#federated-credentials">🔐 Federated Credentials</a></li>
-        <li><a href="#permissions">🛡️ Permissions</a></li>
-        <li><a href="#github-secrets">🔑 GitHub Secrets</a></li>
-        <li><a href="#deploy">🚀 Deploy</a></li>
-      </ul>
-      <div class="sidebar-section-label">REFERENCE</div>
-      <ul class="sidebar-links" id="page-nav-ref">
-        <li><a href="#troubleshooting">🚨 Troubleshooting</a></li>
-        <li><a href="#quick-reference">📋 Quick Reference</a></li>
-        <li><a href="#optional-config">⚙️ Optional Config</a></li>
-      </ul>
-    </div>
-  </aside>
-  </div><!-- /docs-page-wrapper -->
+    <!-- Right Sidebar Table of Contents -->
+    <aside class="doc-toc">
+      <div class="doc-toc-sticky">
+        <nav class="doc-toc-card">
+          <div class="doc-toc-title">On This Page</div>
+          <ul>
+            <li class="doc-toc-item">
+              <a href="#overview"><span class="toc-icon">&#x1F4CB;</span>Overview</a>
+            </li>
+            <div class="doc-toc-divider"></div>
+            <div class="doc-toc-section-label">Setup Steps</div>
+            <li class="doc-toc-item">
+              <a href="#app-service"><span class="toc-icon">1&#xFE0F;&#x20E3;</span>Create App Service</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#app-registration"><span class="toc-icon">2&#xFE0F;&#x20E3;</span>App Registration</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#federated-credentials"><span class="toc-icon">3&#xFE0F;&#x20E3;</span>Federated Creds</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#permissions"><span class="toc-icon">4&#xFE0F;&#x20E3;</span>Permissions</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#github-secrets"><span class="toc-icon">5&#xFE0F;&#x20E3;</span>GitHub Secrets</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#deploy"><span class="toc-icon">6&#xFE0F;&#x20E3;</span>Deploy</a>
+            </li>
+            <div class="doc-toc-divider"></div>
+            <div class="doc-toc-section-label">Reference</div>
+            <li class="doc-toc-item">
+              <a href="#troubleshooting"><span class="toc-icon">&#x1F527;</span>Troubleshooting</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#optional-config"><span class="toc-icon">&#x2699;&#xFE0F;</span>Optional Config</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#quick-reference"><span class="toc-icon">&#x1F4CB;</span>Quick Reference</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </aside>
+  </div><!-- /.doc-layout -->
 
   <footer>
     <p>Performance Problem Simulator &mdash; Educational Tool for Azure App Service Diagnostics</p>
-    <p id="page-footer"></p>
+    <p id="footer-credits"></p>
     <p id="build-info">Build: Loading...</p>
   </footer>
 
   <script>
-    // Load environment info for SKU badge and footer
+    // Load environment info for SKU badge
     fetch('/api/health')
       .then(r => r.json())
       .then(data => {
         const badge = document.getElementById('sku-badge');
         if (badge && data.environment) badge.textContent = 'SKU: ' + (data.environment.sku || 'Local');
-        // Load build info for footer
+        // Load page footer from PAGE_FOOTER env var (allows HTML links)
+        const footerCredits = document.getElementById('footer-credits');
+        if (footerCredits) {
+          if (data.pageFooter) {
+            footerCredits.innerHTML = data.pageFooter;
+          } else {
+            footerCredits.style.display = 'none';
+          }
+        }
         const buildInfo = document.getElementById('build-info');
         if (buildInfo && data.buildTimestamp) {
           buildInfo.textContent = 'Build: ' + data.buildTimestamp;
-        }
-        // Load page footer from PAGE_FOOTER env var (allows HTML links)
-        const pageFooter = document.getElementById('page-footer');
-        if (pageFooter) {
-          if (data.pageFooter) {
-            pageFooter.innerHTML = data.pageFooter;
-          } else {
-            pageFooter.style.display = 'none';
-          }
         }
       })
       .catch(() => {});
@@ -671,23 +789,30 @@ echo "AZURE_SUBSCRIPTION_ID=$SUB_ID"</code></pre>
 
     // Scroll-spy: highlight active section in right sidebar
     (function() {
-      const links = document.querySelectorAll('#page-nav a, #page-nav-steps a, #page-nav-ref a');
-      const sections = [];
-      links.forEach(link => {
-        const id = link.getAttribute('href').slice(1);
-        const el = document.getElementById(id);
-        if (el) sections.push({ id, el, link });
-      });
-      function updateActive() {
-        let current = sections[0];
-        for (const s of sections) {
-          if (s.el.getBoundingClientRect().top <= 100) current = s;
-        }
-        links.forEach(l => l.classList.remove('active'));
-        if (current) current.link.classList.add('active');
+      const tocLinks = document.querySelectorAll('.doc-toc-item a');
+      const sections = document.querySelectorAll('.card');
+
+      function updateActiveTocLink() {
+        const scrollPos = window.scrollY + 120;
+        
+        sections.forEach(section => {
+          const sectionTop = section.offsetTop;
+          const sectionHeight = section.offsetHeight;
+          const sectionId = section.getAttribute('id');
+          
+          if (sectionId && scrollPos >= sectionTop && scrollPos < sectionTop + sectionHeight) {
+            tocLinks.forEach(link => {
+              link.classList.remove('active');
+              if (link.getAttribute('href') === '#' + sectionId) {
+                link.classList.add('active');
+              }
+            });
+          }
+        });
       }
-      window.addEventListener('scroll', updateActive, { passive: true });
-      updateActive();
+
+      window.addEventListener('scroll', updateActiveTocLink);
+      updateActiveTocLink(); // Initial call
     })();
   </script>
 </body>

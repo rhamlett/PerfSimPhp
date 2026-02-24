@@ -3,18 +3,107 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- PORTING NOTE: Update title and branding for target runtime -->
   <title>PerfSimPhp - Documentation</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/css/styles.css">
   <style>
-    .docs-container {
-      max-width: 900px;
+    /* Doc Layout - Main + TOC Sidebar */
+    .doc-layout {
+      display: flex;
+      gap: 2rem;
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 1rem;
+      padding: 2rem;
+    }
+    .doc-main {
       flex: 1;
       min-width: 0;
     }
+    .docs-container {
+      max-width: 900px;
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+    .doc-toc {
+      width: 280px;
+      flex-shrink: 0;
+    }
+    .doc-toc-sticky {
+      position: sticky;
+      top: 80px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    .doc-toc-card {
+      background: var(--color-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: 1.25rem;
+    }
+    .doc-toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--color-bg);
+    }
+    .doc-toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .doc-toc-item {
+      margin-bottom: 0.25rem;
+    }
+    .doc-toc-item a {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      color: var(--color-text-muted);
+      font-size: 0.875rem;
+      transition: all var(--transition-fast);
+      border-left: 2px solid transparent;
+    }
+    .doc-toc-item a:hover {
+      background: rgba(92, 85, 152, 0.08);
+      color: var(--color-primary);
+      border-left-color: var(--color-primary);
+    }
+    .doc-toc-item a.active {
+      background: rgba(92, 85, 152, 0.12);
+      color: var(--color-primary);
+      font-weight: 500;
+      border-left-color: var(--color-primary);
+    }
+    .toc-icon {
+      font-size: 1rem;
+      width: 1.25rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .doc-toc-divider {
+      height: 1px;
+      background: var(--color-bg);
+      margin: 0.75rem 0;
+    }
+    .doc-toc-section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      padding: 0.5rem 0.75rem 0.25rem;
+      opacity: 0.7;
+    }
+
+    /* Page Content Styles */
     .docs-header {
       text-align: center;
       margin-bottom: 2rem;
@@ -29,15 +118,16 @@
       font-size: 1.1rem;
     }
     .docs-section {
-      background-color: var(--color-card);
+      background: var(--color-card);
       border-radius: var(--radius-md);
-      padding: 2rem;
-      margin-bottom: 1.5rem;
       box-shadow: var(--shadow-sm);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      scroll-margin-top: 80px;
     }
     .docs-section h2 {
       color: var(--color-primary);
-      border-bottom: 2px solid #edebe9;
+      border-bottom: 2px solid var(--color-bg);
       padding-bottom: 0.5rem;
       margin-bottom: 1rem;
     }
@@ -46,50 +136,110 @@
       margin-top: 1.5rem;
       margin-bottom: 0.5rem;
     }
+    .docs-section p {
+      margin-bottom: 1rem;
+      color: var(--color-text-muted);
+    }
+    .docs-section ul, .docs-section ol {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .docs-section li {
+      margin-bottom: 0.5rem;
+      color: var(--color-text-muted);
+    }
     .docs-section code {
-      background-color: var(--color-bg);
+      background: #f6f8fa;
       padding: 0.2rem 0.4rem;
       border-radius: var(--radius-sm);
       font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.875em;
+      color: var(--color-danger);
     }
     .docs-section pre {
-      background-color: #1e1e1e;
+      background: #1e1e1e;
       color: #d4d4d4;
       padding: 1rem;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-md);
       overflow-x: auto;
       margin: 1rem 0;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
     }
     .docs-section pre code {
       background: none;
       padding: 0;
+      color: inherit;
     }
     .warning-box {
-      background-color: #fff4ce;
+      background: linear-gradient(135deg, rgba(255, 185, 0, 0.15) 0%, rgba(209, 52, 56, 0.1) 100%);
       border-left: 4px solid var(--color-warning);
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 1rem 1.5rem;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin: 1.5rem 0;
     }
+    .warning-box p { margin: 0; color: var(--color-text); }
     .info-box {
-      background-color: #e6f3ff;
-      border-left: 4px solid var(--color-primary);
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      background: rgba(0, 120, 212, 0.1);
+      border-left: 4px solid var(--color-cpu);
+      padding: 1rem 1.5rem;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      margin: 1.5rem 0;
     }
+    .info-box p { margin: 0; color: var(--color-text); }
     table {
       width: 100%;
       border-collapse: collapse;
       margin: 1rem 0;
     }
     th, td {
-      border: 1px solid #edebe9;
+      border: 1px solid var(--color-bg);
       padding: 0.5rem;
       text-align: left;
     }
     th {
-      background-color: var(--color-bg);
+      background: var(--color-bg);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    @media (max-width: 1024px) {
+      .doc-layout {
+        flex-direction: column;
+      }
+      .doc-toc {
+        width: 100%;
+        order: -1;
+      }
+      .doc-toc-sticky {
+        position: relative;
+        top: 0;
+        max-height: none;
+      }
+      .doc-toc ul {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .doc-toc-item {
+        margin-bottom: 0;
+      }
+      .doc-toc-item a {
+        padding: 0.375rem 0.625rem;
+        border-left: none;
+        border-radius: var(--radius-md);
+        background: var(--color-bg);
+      }
+      .doc-toc-divider,
+      .doc-toc-section-label {
+        display: none;
+      }
+    }
+    @media (max-width: 768px) {
+      .doc-layout {
+        padding: 1rem;
+      }
     }
   </style>
 </head>
@@ -100,11 +250,10 @@
       <span></span>
       <span></span>
     </button>
-    <!-- PORTING NOTE: Update heading for target runtime -->
-    <h1>� Documentation</h1>
+    <h1>&#x1F4DA; Documentation</h1>
     <span id="sku-badge" class="sku-badge">SKU: Local</span>
     <nav>
-      <a href="/" class="btn-panel-toggle">🎮 Dashboard</a>
+      <a href="/" class="btn-panel-toggle">&#x1F3AE; Dashboard</a>
     </nav>
   </header>
 
@@ -112,158 +261,141 @@
   <div id="sidebar-overlay" class="sidebar-overlay"></div>
   <aside id="sidebar-drawer" class="sidebar-drawer">
     <div class="sidebar-header">
-      <h2>🐘 PerfSimPhp</h2>
+      <h2>&#x1F418; PerfSimPhp</h2>
       <button id="sidebar-close" class="sidebar-close" aria-label="Close navigation">&times;</button>
     </div>
     <nav class="sidebar-nav">
       <div class="sidebar-section-label">Application</div>
       <a href="/" class="sidebar-nav-item">
-        <span class="nav-icon">🎮</span>
-        <span class="nav-label">Dashboard<span class="nav-desc">Live metrics & controls</span></span>
+        <span class="nav-icon">&#x1F3AE;</span>
+        <span class="nav-label">Dashboard<span class="nav-desc">Live metrics &amp; controls</span></span>
       </a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">Documentation</div>
       <a href="/docs.html" class="sidebar-nav-item active">
-        <span class="nav-icon">📚</span>
-        <span class="nav-label">Documentation<span class="nav-desc">API reference & guides</span></span>
+        <span class="nav-icon">&#x1F4DA;</span>
+        <span class="nav-label">Documentation<span class="nav-desc">API reference &amp; guides</span></span>
       </a>
       <a href="/azure-diagnostics.html" class="sidebar-nav-item">
-        <span class="nav-icon">☁️</span>
+        <span class="nav-icon">&#x2601;&#xFE0F;</span>
         <span class="nav-label">Azure Diagnostics<span class="nav-desc">Diagnose issues in App Service</span></span>
       </a>
       <a href="/azure-deployment.html" class="sidebar-nav-item">
-        <span class="nav-icon">🚀</span>
+        <span class="nav-icon">&#x1F680;</span>
         <span class="nav-label">Deploy to Azure<span class="nav-desc">GitHub Actions + OIDC setup</span></span>
       </a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">External</div>
-      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" rel="noopener" class="sidebar-nav-item">
-        <span class="nav-icon">🐙</span>
-        <span class="nav-label">GitHub Repository<span class="nav-desc">Source code & issues</span></span>
+      <a href="https://github.com/rhamlett/perfsimphp" target="_blank" class="sidebar-nav-item">
+        <span class="nav-icon">&#x1F419;</span>
+        <span class="nav-label">GitHub Repository<span class="nav-desc">Source code &amp; issues</span></span>
       </a>
     </nav>
     <div class="sidebar-footer">
-      Performance Problem Simulator
+      PerfSimPhp v1.0 &bull; PHP 8.4
     </div>
   </aside>
 
-  <div class="docs-page-wrapper">
-  <main class="docs-container">
+  <div class="doc-layout">
+    <div class="doc-main">
+    <main class="docs-container">
     <div class="docs-header">
-      <h1>📚 Documentation</h1>
+      <h1>&#x1F4DA; Documentation</h1>
       <p>Complete API reference and guides for PerfSimPhp performance simulation tools</p>
     </div>
 
     <section id="overview" class="docs-section">
       <h2>Overview</h2>
-      <!-- PORTING NOTE: Update overview description for target runtime -->
       <p>PerfSimPhp is an educational tool designed to help Azure support engineers practice diagnosing common PHP performance problems on Azure App Service. It intentionally generates controllable performance issues that mimic real-world scenarios.</p>
       
       <h3>Features</h3>
       <ul>
         <li><strong>CPU Stress</strong> &mdash; Generate high CPU usage at configurable percentages</li>
         <li><strong>Memory Pressure</strong> &mdash; Allocate and retain memory to simulate leaks</li>
-        <!-- PORTING NOTE: Event Loop Blocking → Request Thread Blocking for PHP -->
         <li><strong>Request Thread Blocking</strong> &mdash; Block PHP-FPM workers with synchronous operations</li>
         <li><strong>Crash Simulation</strong> &mdash; Trigger fatal errors, exit, or OOM conditions</li>
       </ul>
 
       <h3>Architecture</h3>
-      <!-- PORTING NOTE: Update architecture description and directory tree for target runtime -->
       <p>The application runs on PHP 8.4 with Nginx + PHP-FPM, using APCu or file-based shared storage for cross-request state, and AJAX polling for real-time metrics.</p>
       <pre><code>public/
-├── index.php               # Front controller (all requests)
-├── index.html              # Main dashboard
-├── docs.html               # Documentation
-├── azure-diagnostics.html  # Diagnostics guide
-├── azure-deployment.html   # Deployment guide
-├── css/styles.css          # Shared stylesheet
-├── js/
-│   ├── polling-client.js   # AJAX polling client (replaces Socket.IO)
-│   ├── charts.js           # Real-time Chart.js charts
-│   └── dashboard.js        # UI interactions &amp; form handlers
+&#x251C;&#x2500;&#x2500; index.php               # Front controller (all requests)
+&#x251C;&#x2500;&#x2500; index.html              # Main dashboard
+&#x251C;&#x2500;&#x2500; docs.html               # Documentation
+&#x251C;&#x2500;&#x2500; azure-diagnostics.html  # Diagnostics guide
+&#x251C;&#x2500;&#x2500; azure-deployment.html   # Deployment guide
+&#x251C;&#x2500;&#x2500; css/styles.css          # Shared stylesheet
+&#x2514;&#x2500;&#x2500; js/
+    &#x251C;&#x2500;&#x2500; polling-client.js   # AJAX polling client
+    &#x251C;&#x2500;&#x2500; charts.js           # Real-time Chart.js charts
+    &#x2514;&#x2500;&#x2500; dashboard.js        # UI interactions
 
 src/
-├── bootstrap.php           # Autoloader &amp; initialization
-├── Config.php              # Application configuration
-├── SharedStorage.php       # Cross-request state (APCu or file)
-├── Router.php              # URL routing
-├── Utils.php               # Utility functions
-├── Middleware/
-│   ├── ErrorHandler.php    # Error handling
-│   ├── RequestLogger.php   # Request logging
-│   └── Validation.php      # Input validation
-├── Services/
-│   ├── CpuStressService.php      # Background CPU workers via exec()
-│   ├── MemoryPressureService.php # Shared storage memory allocation
-│   ├── BlockingService.php       # FPM worker pool blocking
-
-│   ├── CrashService.php          # Worker crash triggers
-│   ├── CrashTrackingService.php  # Crash statistics tracking
-│   ├── LoadTestService.php       # Azure Load Testing endpoint
-│   ├── MetricsService.php        # System metrics collection
-│   ├── EventLogService.php       # Event ring buffer
-│   └── SimulationTrackerService.php
-└── Controllers/
-    ├── HealthController.php
-    ├── MetricsController.php
-    ├── CpuController.php
-    ├── MemoryController.php
-    ├── BlockingController.php
-    ├── CrashController.php
-    ├── LoadTestController.php
-    └── AdminController.php
-
-workers/
-└── cpu-worker.php          # Background CPU stress process</code></pre>
+&#x251C;&#x2500;&#x2500; bootstrap.php           # Autoloader &amp; initialization
+&#x251C;&#x2500;&#x2500; Config.php              # Application configuration
+&#x251C;&#x2500;&#x2500; SharedStorage.php       # Cross-request state (APCu or file)
+&#x251C;&#x2500;&#x2500; Router.php              # URL routing
+&#x251C;&#x2500;&#x2500; Utils.php               # Utility functions
+&#x251C;&#x2500;&#x2500; Middleware/
+&#x2502;   &#x251C;&#x2500;&#x2500; ErrorHandler.php    # Error handling
+&#x2502;   &#x251C;&#x2500;&#x2500; RequestLogger.php   # Request logging
+&#x2502;   &#x2514;&#x2500;&#x2500; Validation.php      # Input validation
+&#x251C;&#x2500;&#x2500; Services/
+&#x2502;   &#x251C;&#x2500;&#x2500; CpuStressService.php      # Background CPU workers via exec()
+&#x2502;   &#x251C;&#x2500;&#x2500; MemoryPressureService.php # Shared storage memory allocation
+&#x2502;   &#x251C;&#x2500;&#x2500; BlockingService.php       # FPM worker pool blocking
+&#x2502;   &#x251C;&#x2500;&#x2500; CrashService.php          # Worker crash triggers
+&#x2502;   &#x251C;&#x2500;&#x2500; MetricsService.php        # System metrics collection
+&#x2502;   &#x2514;&#x2500;&#x2500; EventLogService.php       # Event ring buffer
+&#x2514;&#x2500;&#x2500; Controllers/
+    &#x251C;&#x2500;&#x2500; HealthController.php
+    &#x251C;&#x2500;&#x2500; MetricsController.php
+    &#x251C;&#x2500;&#x2500; CpuController.php
+    &#x251C;&#x2500;&#x2500; MemoryController.php
+    &#x251C;&#x2500;&#x2500; BlockingController.php
+    &#x251C;&#x2500;&#x2500; CrashController.php
+    &#x2514;&#x2500;&#x2500; AdminController.php</code></pre>
     </section>
 
     <section id="cpu-stress" class="docs-section">
       <h2>CPU Stress Simulation</h2>
-      <!-- PORTING NOTE: Update implementation details for target runtime's process model -->
-      <p>Generates high CPU usage using separate background PHP processes via <code>exec()</code>.</p>
+      <p>Generates high CPU usage using separate background processes via <code>exec()</code>.</p>
 
       <h3>How It Works</h3>
-      <p>Unlike naive CPU burning in the request thread (which would block the FPM worker), this simulation spawns separate background processes that each run <code>hash_pbkdf2()</code> in a tight loop. The OS scheduler distributes these processes across CPU cores.</p>
+      <p>Spawns separate PHP CLI processes that run <code>hash_pbkdf2()</code> in a tight loop. The OS scheduler distributes these processes across CPU cores.</p>
       
       <div class="info-box">
-        <!-- PORTING NOTE: Update runtime insight for target runtime -->
-        <strong>🐘 PHP Insight:</strong> CPU-intensive work should be isolated from PHP-FPM workers. Background processes via <code>exec("nohup php worker.php &amp;")</code> guarantee true multi-core utilization without blocking request handling.
+        <p><strong>&#x1F4A1; PHP Insight:</strong> CPU-intensive work runs in separate processes to avoid blocking PHP-FPM workers. This allows the dashboard to remain responsive during CPU stress tests.</p>
       </div>
 
       <h3>Usage</h3>
-      <pre><code>POST /api/simulations/cpu/start
+      <pre><code>POST /api/simulations/cpu
 Content-Type: application/json
 
 {
-  "level": "high",
+  "intensity": "high",
   "durationSeconds": 30
 }</code></pre>
 
       <h3>Parameters</h3>
       <table>
         <tr><th>Parameter</th><th>Values</th><th>Description</th></tr>
-        <tr><td>level</td><td>"moderate" | "high"</td><td>CPU stress intensity level</td></tr>
+        <tr><td>intensity</td><td>"moderate" | "high"</td><td>CPU stress intensity level</td></tr>
         <tr><td>durationSeconds</td><td>1-300</td><td>How long to run the simulation</td></tr>
       </table>
 
       <h3>Expected Effects</h3>
       <ul>
         <li>CPU tile/chart increases to target percentage</li>
-        <!-- PORTING NOTE: Update expected effects for target runtime -->
-        <li>FPM workers stay available (work is in background processes)</li>
+        <li>FPM workers stay low (work is in separate processes)</li>
         <li>Request latency may increase slightly due to CPU contention</li>
         <li>Multiple <code>php</code> processes visible in <code>top</code>/<code>htop</code></li>
       </ul>
 
-      <div class="info-box">
-        <strong>📊 About CPU Metrics:</strong> The dashboard reads CPU from <code>/proc/stat</code> and <code>sys_getloadavg()</code>. This may show fluctuations at idle due to PHP-FPM worker management and container scheduling. Focus on the <em>trend</em> during simulations, not individual spikes. Production tools (Azure Monitor) sample every 1 minute with averaging.
-      </div>
-
       <h3>Diagnostic Tools</h3>
       <ul>
-        <li><code>top</code> / <code>htop</code> &mdash; View all PHP processes</li>
-        <li><code>ps aux | grep php</code> &mdash; See background worker processes</li>
+        <li><code>top</code> / <code>htop</code> - View all PHP processes</li>
+        <li><code>ps aux | grep php</code> - See process tree</li>
         <li>Azure App Service Diagnostics &rarr; CPU drill-down</li>
         <li>Application Insights &rarr; Performance metrics</li>
       </ul>
@@ -271,132 +403,109 @@ Content-Type: application/json
 
     <section id="memory-pressure" class="docs-section">
       <h2>Memory Pressure Simulation</h2>
-      <!-- PORTING NOTE: Update memory description for target runtime -->
-      <p>Allocates and retains large data blocks in shared storage to simulate memory leaks across PHP-FPM workers.</p>
+      <p>Allocates and retains memory in APCu shared storage to simulate memory leaks.</p>
 
       <h3>How It Works</h3>
-      <p>Uses APCu shared memory (or file-based storage) to allocate large strings filled with random data. Data is held in shared storage until explicitly released, visible to all FPM workers. Multiple allocations can coexist (stacking behavior).</p>
+      <p>Uses APCu shared memory to store buffers that persist across requests. Multiple allocations can coexist (stacking behavior).</p>
 
       <div class="info-box">
-        <strong>🐘 PHP Insight:</strong> PHP-FPM uses multiple worker processes. Memory in APCu is shared across workers. File-based storage creates actual disk usage. The <code>memory_limit</code> INI setting controls per-request memory, but shared storage allocations bypass this limit.
+        <p><strong>&#x1F4A1; PHP Insight:</strong> Unlike Node.js, PHP processes are stateless. To persist memory allocations across requests, we use APCu shared memory which is visible to all FPM workers.</p>
       </div>
 
       <h3>Usage</h3>
       <pre><code># Allocate memory
-POST /api/simulations/memory/allocate
+POST /api/simulations/memory
 {"sizeMb": 100}
 
-# Release all memory
-POST /api/simulations/memory/release</code></pre>
+# Release memory (use the returned ID)
+DELETE /api/simulations/memory/{id}</code></pre>
 
       <h3>Parameters</h3>
       <table>
         <tr><th>Parameter</th><th>Range</th><th>Description</th></tr>
-        <tr><td>sizeMb</td><td>1-2000</td><td>Memory to allocate in megabytes</td></tr>
+        <tr><td>sizeMb</td><td>1-500</td><td>Memory to allocate in megabytes</td></tr>
       </table>
 
       <h3>Expected Effects</h3>
       <ul>
-        <li>Memory usage increases by allocation size</li>
-        <li>RSS memory increases proportionally</li>
-        <!-- PORTING NOTE: Update GC-specific behavior for target runtime -->
-        <li>PHP-FPM workers accessing shared data contribute to total memory</li>
-        <li>With file-based storage, disk usage increases</li>
+        <li>Memory metric increases by allocation size</li>
+        <li>APCu shared memory fills up</li>
+        <li>Worker memory (RSS) increases proportionally</li>
       </ul>
 
       <h3>Diagnostic Tools</h3>
       <ul>
         <li>Azure App Service &rarr; Memory metrics</li>
-        <li><code>free -m</code> &mdash; System memory overview</li>
-        <li><code>ps aux --sort=-%mem | head</code> &mdash; Top memory consumers</li>
-        <li>Application Insights &rarr; customMetrics for memory stats</li>
+        <li><code>cat /proc/meminfo</code> - System memory stats</li>
+        <li>APCu info via <code>apcu_cache_info()</code></li>
       </ul>
     </section>
 
-    <!-- PORTING NOTE: This entire section changes based on the target runtime's concurrency model.
-         Node.js: Event Loop Blocking (single-threaded event loop)
-         PHP: Request Thread Blocking (multi-process FPM workers)
-         Go: Goroutine blocking, .NET: ThreadPool exhaustion, etc. -->
     <section id="request-thread-blocking" class="docs-section">
       <h2>Request Thread Blocking Simulation</h2>
-      <p>Demonstrates how CPU-intensive synchronous operations inside PHP-FPM workers can exhaust the worker pool, causing request queuing.</p>
+      <p>Demonstrates how synchronous operations block PHP-FPM workers, causing pool exhaustion.</p>
 
       <div class="warning-box">
-        <strong>⚠️ Warning:</strong> During this simulation, individual PHP-FPM workers will be blocked and unable to serve other requests. If all workers are blocked, the server becomes completely unresponsive to new requests.
+        <p><strong>&#x26A0;&#xFE0F; Warning:</strong> During this simulation with enough concurrent requests, the FPM worker pool can become exhausted. New requests will queue until workers become available.</p>
       </div>
 
       <h3>How It Works</h3>
-      <p>Performs synchronous <code>hash_pbkdf2()</code> directly inside a PHP-FPM worker process. While the worker is blocked, it cannot handle any other requests. When enough workers are blocked, the entire FPM pool is exhausted and new requests queue at the Nginx level.</p>
+      <p>Performs synchronous <code>sleep()</code> calls directly in the FPM worker. Each blocked request holds a worker until complete.</p>
 
       <div class="info-box">
-        <strong>🐘 PHP Insight:</strong> In PHP, blocking one FPM worker only blocks that one request — you need to exhaust the entire worker pool to see queueing. This is how worker pool exhaustion manifests in request-per-process architectures.
+        <p><strong>&#x1F4A1; Key Difference from CPU Stress:</strong> CPU stress uses child processes (dashboard stays responsive). Request blocking runs in FPM workers (pool can be exhausted). Check the FPM Workers Busy metric to distinguish them!</p>
       </div>
 
-      <h3>Key Difference from CPU Stress</h3>
-      <p>CPU stress uses <em>background processes</em> (FPM workers stay available). Request thread blocking runs <em>inside an FPM worker</em> (that worker becomes unavailable). Check the FPM Workers Busy metric to distinguish them!</p>
-
       <h3>Usage</h3>
-      <pre><code>POST /api/simulations/blocking/start
-{"durationSeconds": 5}</code></pre>
+      <pre><code>POST /api/simulations/blocking
+{"durationSeconds": 10, "workerCount": 4}</code></pre>
 
       <h3>Symptoms to Observe</h3>
       <ul>
-        <li>FPM Workers Busy count increases during blocking</li>
-        <li>New requests queue when all workers are occupied</li>
-        <li>Probe dots turn yellow/orange as workers become scarce</li>
-        <li>Request latency increases as FPM pool is exhausted</li>
-        <li>Health checks may timeout if no workers are available</li>
+        <li>FPM Workers Busy increases to match blocked workers</li>
+        <li>Probe latency spikes when pool is exhausted</li>
+        <li>New requests queue and complete together after unblock</li>
+        <li>CPU stays relatively low (just waiting)</li>
       </ul>
 
       <h3>Diagnostic Tools</h3>
       <ul>
-        <li><code>php-fpm status page</code> &mdash; View active/idle worker counts</li>
-        <li><code>ps aux | grep php-fpm</code> &mdash; See worker process states</li>
-        <li>Nginx access logs &mdash; Look for 502/504 errors during pool exhaustion</li>
-        <li>Azure App Service Diagnostics &rarr; PHP worker analysis</li>
+        <li>Azure App Service Diagnostics &rarr; PHP tab</li>
+        <li><code>ps aux | grep php-fpm</code> - See worker states</li>
+        <li>FPM status page (if enabled)</li>
       </ul>
     </section>
 
     <section id="crash-simulation" class="docs-section">
       <h2>Crash Simulation</h2>
-      <!-- PORTING NOTE: Update crash description for target runtime -->
-      <p>Intentionally crashes a PHP-FPM worker process for testing crash recovery and observing restart behavior.</p>
+      <p>Intentionally crashes PHP-FPM workers for testing crash recovery and observing restart behavior.</p>
 
       <div class="warning-box">
-        <strong>⚠️ Warning:</strong> These operations will terminate the PHP-FPM worker process. PHP-FPM master will automatically respawn it. The dashboard will briefly lose connectivity for the affected request.
+        <p><strong>&#x26A0;&#xFE0F; Warning:</strong> These operations will terminate the worker process. PHP-FPM automatically spawns replacement workers. Dashboard may briefly disconnect.</p>
       </div>
 
       <h3>Crash Types</h3>
-      <!-- PORTING NOTE: Update crash types and methods for target runtime -->
       <table>
         <tr><th>Type</th><th>Endpoint</th><th>Method</th><th>Effect</th></tr>
-        <tr><td>FailFast</td><td><code>/api/simulations/crash/failfast</code></td><td><code>exit(1)</code></td><td>Immediate process termination</td></tr>
-        <tr><td>Stack Overflow</td><td><code>/api/simulations/crash/stackoverflow</code></td><td>Infinite recursion</td><td>Call stack exhausted</td></tr>
-        <tr><td>Fatal Error</td><td><code>/api/simulations/crash/exception</code></td><td><code>trigger_error(E_USER_ERROR)</code></td><td>Fatal error terminates worker</td></tr>
-        <tr><td>OOM</td><td><code>/api/simulations/crash/oom</code></td><td>Exceed <code>memory_limit</code></td><td>Memory exhaustion, worker killed</td></tr>
+        <tr><td>FailFast</td><td><code>/crash/failfast</code></td><td><code>exit(1)</code></td><td>Immediate process termination</td></tr>
+        <tr><td>Fatal Error</td><td><code>/crash/fatal</code></td><td><code>trigger_error()</code></td><td>E_USER_ERROR with stack trace</td></tr>
+        <tr><td>Exception</td><td><code>/crash/exception</code></td><td><code>throw Exception</code></td><td>Uncaught exception terminates</td></tr>
+        <tr><td>OOM</td><td><code>/crash/memory</code></td><td>Infinite allocation</td><td>Memory exhaustion, OOM kill</td></tr>
       </table>
 
       <h3>Expected Behavior</h3>
       <ul>
-        <li>FPM worker process terminates immediately</li>
-        <li>Response is sent before crash via <code>fastcgi_finish_request()</code></li>
-        <li>PHP-FPM master auto-restarts the worker automatically</li>
-        <li>Dashboard shows session crash counter incrementing</li>
-        <li>Event Log shows crash initiated messages</li>
-        <li>Shared storage (APCu/files) persists across worker restarts</li>
-        <li>Use "Crash Multiple Workers" to send concurrent crash requests for more visible impact</li>
+        <li>Worker process terminates immediately</li>
+        <li>PHP-FPM spawns a new worker (automatic)</li>
+        <li>Event Log shows crash details and recovery</li>
+        <li>Other requests continue (other workers unaffected)</li>
       </ul>
-
-      <div class="info-box">
-        <strong>🐘 PHP Insight:</strong> In PHP, a crash only kills one FPM worker — other workers continue serving requests. The FPM master respawns the crashed worker automatically, providing built-in fault isolation.
-      </div>
 
       <h3>Diagnostic Tools</h3>
       <ul>
         <li>Azure App Service &rarr; Diagnose and Solve Problems &rarr; Application Crashes</li>
         <li>Log Stream (real-time crash logs)</li>
-        <li>Kudu &rarr; LogFiles &rarr; php</li>
-        <li>PHP-FPM slow log: <code>/var/log/php-fpm/slow.log</code></li>
+        <li>Kudu &rarr; LogFiles &rarr; Application</li>
         <li>Application Insights &rarr; Failures blade</li>
       </ul>
     </section>
@@ -407,16 +516,15 @@ POST /api/simulations/memory/release</code></pre>
       
       <h3>What's Covered</h3>
       <ul>
-        <li><strong>Understanding Metrics</strong> &mdash; What CPU, memory, FPM workers, and latency metrics mean</li>
-        <li><strong>PHP-FPM Architecture</strong> — Understanding the worker process model and resource management</li>
-        <li><strong>Diagnostic Scenarios</strong> &mdash; Step-by-step walkthroughs for each simulation type</li>
-        <li><strong>Azure Tools</strong> &mdash; App Service Diagnostics, Application Insights, Kudu console</li>
-        <li><strong>Linux Tools</strong> &mdash; Process monitoring, PHP debugging, network analysis</li>
-        <li><strong>AppLens Queries</strong> &mdash; Ready-to-use KQL queries for Azure diagnostics</li>
+        <li><strong>Understanding Metrics</strong> - What CPU, memory, FPM workers, and latency metrics mean</li>
+        <li><strong>Diagnostic Scenarios</strong> - Step-by-step walkthroughs for each simulation type</li>
+        <li><strong>Azure Tools</strong> - App Service Diagnostics, Application Insights, Kudu console</li>
+        <li><strong>Linux Tools</strong> - Process monitoring, PHP debugging, network analysis</li>
+        <li><strong>KQL Queries</strong> - Ready-to-use queries for Azure diagnostics</li>
       </ul>
       
       <div class="info-box">
-        <strong>💡 Tip:</strong> Open the <a href="/azure-diagnostics.html">Azure Diagnostics Guide</a> in a separate tab while running simulations to follow along with the diagnostic workflows.
+        <p><strong>&#x1F4A1; Tip:</strong> Open the <a href="/azure-diagnostics.html">Azure Diagnostics Guide</a> in a separate tab while running simulations to follow along with the diagnostic workflows.</p>
       </div>
     </section>
 
@@ -426,32 +534,29 @@ POST /api/simulations/memory/release</code></pre>
       <h3>Health &amp; Metrics</h3>
       <table>
         <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
-        <tr><td><code>/api/health</code></td><td>GET</td><td>Health check with uptime and environment info</td></tr>
+        <tr><td><code>/api/health</code></td><td>GET</td><td>Health check with uptime</td></tr>
         <tr><td><code>/api/metrics/probe</code></td><td>GET</td><td>Lightweight probe for latency monitoring</td></tr>
-        <tr><td><code>/api/metrics/internal-probes</code></td><td>GET</td><td>Batch internal probes via localhost (bypasses stamp frontend)</td></tr>
         <tr><td><code>/api/metrics</code></td><td>GET</td><td>Current system metrics (CPU, memory, FPM workers)</td></tr>
       </table>
       
       <h3>Simulations</h3>
-      <!-- PORTING NOTE: Update API endpoints to match target runtime's routing -->
       <table>
         <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
         <tr><td><code>/api/simulations</code></td><td>GET</td><td>List all active simulations</td></tr>
-        <tr><td><code>/api/simulations/cpu/start</code></td><td>POST</td><td>Start CPU stress (background processes)</td></tr>
-        <tr><td><code>/api/simulations/cpu/stop</code></td><td>POST</td><td>Stop CPU stress</td></tr>
-        <tr><td><code>/api/simulations/memory/allocate</code></td><td>POST</td><td>Allocate memory</td></tr>
-        <tr><td><code>/api/simulations/memory/release</code></td><td>POST</td><td>Release all memory</td></tr>
-        <tr><td><code>/api/simulations/blocking/start</code></td><td>POST</td><td>Block FPM worker thread</td></tr>
+        <tr><td><code>/api/simulations/cpu</code></td><td>POST</td><td>Start CPU stress (background processes)</td></tr>
+        <tr><td><code>/api/simulations/cpu/:id</code></td><td>DELETE</td><td>Stop CPU stress</td></tr>
+        <tr><td><code>/api/simulations/memory</code></td><td>POST</td><td>Allocate memory</td></tr>
+        <tr><td><code>/api/simulations/memory/:id</code></td><td>DELETE</td><td>Release memory</td></tr>
+        <tr><td><code>/api/simulations/blocking</code></td><td>POST</td><td>Block FPM workers</td></tr>
       </table>
       
       <h3>Crash Endpoints</h3>
       <table>
-        <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
-        <tr><td><code>/api/simulations/crash/failfast</code></td><td>POST</td><td>FailFast &mdash; exit(1)</td></tr>
-        <tr><td><code>/api/simulations/crash/stackoverflow</code></td><td>POST</td><td>Stack Overflow &mdash; Infinite Recursion</td></tr>
-        <tr><td><code>/api/simulations/crash/exception</code></td><td>POST</td><td>Fatal Error &mdash; trigger_error()</td></tr>
-        <tr><td><code>/api/simulations/crash/oom</code></td><td>POST</td><td>Memory Exhaustion &mdash; Exceed memory_limit</td></tr>
-        <tr><td><code>/api/simulations/crash/stats</code></td><td>GET</td><td>Get crash statistics and active worker counts</td></tr>
+        <tr><th>Endpoint</th><th>Method</th><th>Crash Type</th></tr>
+        <tr><td><code>/api/simulations/crash/failfast</code></td><td>POST</td><td>FailFast (exit)</td></tr>
+        <tr><td><code>/api/simulations/crash/fatal</code></td><td>POST</td><td>Fatal error</td></tr>
+        <tr><td><code>/api/simulations/crash/exception</code></td><td>POST</td><td>Uncaught exception</td></tr>
+        <tr><td><code>/api/simulations/crash/memory</code></td><td>POST</td><td>Memory exhaustion</td></tr>
       </table>
       
       <h3>Admin</h3>
@@ -459,25 +564,23 @@ POST /api/simulations/memory/release</code></pre>
         <tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>
         <tr><td><code>/api/admin/status</code></td><td>GET</td><td>Admin status with configuration</td></tr>
         <tr><td><code>/api/admin/events</code></td><td>GET</td><td>Event log (limit via ?limit=N)</td></tr>
-        <tr><td><code>/api/admin/system-info</code></td><td>GET</td><td>System info (CPUs, memory, PHP config)</td></tr>
+        <tr><td><code>/api/admin/system-info</code></td><td>GET</td><td>System info (CPUs, memory, SKU)</td></tr>
       </table>
 
-      <!-- PORTING NOTE: Node.js has WebSocket events via Socket.IO.
-           PHP uses AJAX polling — document the polling endpoints instead. -->
-      <h3>AJAX Polling (Real-Time Data)</h3>
-      <p>The dashboard uses AJAX polling to receive real-time updates (no WebSocket):</p>
+      <h3>AJAX Polling</h3>
+      <p>The dashboard uses AJAX polling instead of WebSockets:</p>
       <table>
-        <tr><th>Endpoint</th><th>Poll Interval</th><th>Description</th></tr>
-        <tr><td><code>/api/metrics</code></td><td>250ms</td><td>System metrics (CPU, memory, FPM workers)</td></tr>
-        <tr><td><code>/api/metrics/internal-probes</code></td><td>1000ms</td><td>Batch latency probes via internal curl (10 probes @ 100ms)</td></tr>
-        <tr><td><code>/api/admin/events</code></td><td>2000ms</td><td>Event log updates</td></tr>
+        <tr><th>Endpoint</th><th>Frequency</th><th>Description</th></tr>
+        <tr><td><code>/api/metrics</code></td><td>1000ms</td><td>System metrics (CPU, memory, FPM workers)</td></tr>
+        <tr><td><code>/api/metrics/probe</code></td><td>250ms</td><td>Request latency measurements</td></tr>
+        <tr><td><code>/api/admin/events</code></td><td>1000ms</td><td>Event log updates</td></tr>
+        <tr><td><code>/api/simulations</code></td><td>1000ms</td><td>Active simulation states</td></tr>
       </table>
-      <p><em>Latency probes use internal curl to localhost:8080, bypassing Azure's stamp frontend. Results are dispatched to the chart at 100ms intervals, giving 10 samples/sec with only 1 request/sec to AppLens.</em></p>
     </section>
 
     <section id="load-testing" class="docs-section">
       <h2>Azure Load Testing</h2>
-      <p>The Performance Problem Simulator includes a dedicated load testing endpoint designed for use with Azure Load Testing. This endpoint simulates realistic application behavior that degrades gracefully under load.</p>
+      <p>PerfSimPhp includes a dedicated load testing endpoint designed for use with Azure Load Testing. This endpoint simulates realistic application behavior that degrades gracefully under load.</p>
 
       <h3>Load Test Endpoint</h3>
       <p>Unlike other simulation endpoints, this one does NOT appear in the dashboard UI and is meant for automated load testing scenarios only.</p>
@@ -488,52 +591,23 @@ POST /api/simulations/memory/release</code></pre>
       </table>
 
       <h3>Usage</h3>
-      <p>Use the <code>GET /api/loadtest</code> endpoint directly in Azure Load Testing &mdash; no JMeter script required:</p>
-      <pre><code># With defaults (100ms CPU work, 5MB memory, 500ms hold)
-https://perfsimphp.azurewebsites.net/api/loadtest
+      <p>Use the <code>GET /api/loadtest</code> endpoint directly in Azure Load Testing:</p>
+      <pre><code># With defaults
+https://your-app.azurewebsites.net/api/loadtest
 
-# Custom CPU work duration
-https://perfsimphp.azurewebsites.net/api/loadtest?workMs=200
+# Custom parameters
+https://your-app.azurewebsites.net/api/loadtest?workMs=500&amp;memoryKb=10000
 
-# Higher memory with longer hold (visible on dashboard chart)
-https://perfsimphp.azurewebsites.net/api/loadtest?workMs=100&amp;memoryKb=10000&amp;holdMs=1000
-
-# Maximum stress (5s work, 50MB memory)
-https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000</code></pre>
+# Memory only (no CPU work)
+https://your-app.azurewebsites.net/api/loadtest?workMs=0&amp;memoryKb=100</code></pre>
 
       <h3>Query Parameters</h3>
       <table>
-        <tr><th>Parameter</th><th>Default</th><th>Max</th><th>Description</th></tr>
-        <tr><td><code>workMs</code></td><td>100</td><td>5000</td><td>Duration of CPU work in milliseconds (uses hash_pbkdf2)</td></tr>
-        <tr><td><code>memoryKb</code></td><td>5000</td><td>50000</td><td>Memory to allocate per request in KB</td></tr>
-        <tr><td><code>holdMs</code></td><td>500</td><td>5000</td><td>Time to hold memory after CPU work (ms). Ensures dashboard can capture memory usage.</td></tr>
+        <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>workMs</code></td><td>100</td><td>CPU work duration per request (ms)</td></tr>
+        <tr><td><code>memoryKb</code></td><td>10000</td><td>Memory buffer held for request duration (KB)</td></tr>
+        <tr><td><code>holdMs</code></td><td>500</td><td>How long to hold memory after CPU work (ms)</td></tr>
       </table>
-
-      <div class="info-box">
-        <strong>Legacy Parameters:</strong> <code>targetDurationMs</code> and <code>memorySizeKb</code> are still supported as aliases for backwards compatibility.
-      </div>
-
-      <h3>Design Philosophy</h3>
-      <ul>
-        <li><strong>Short Bursts:</strong> Each request does ~100ms of real work, then returns</li>
-        <li><strong>Memory Visibility:</strong> Memory is held for <code>holdMs</code> after CPU work so dashboard metrics can capture it</li>
-        <li><strong>Fast Turnover:</strong> Workers return quickly, preventing total pool exhaustion</li>
-        <li><strong>Natural Degradation:</strong> Under heavy load, requests queue up (realistic back-pressure)</li>
-        <li><strong>Dashboard Resilience:</strong> Metrics endpoints use a dedicated FPM pool (see below)</li>
-      </ul>
-
-      <h3>Stats Logging</h3>
-      <p>Every 60 seconds during active load testing, a summary is logged to the event log:</p>
-      <pre><code>📊 Load Test (60s): 1523 requests, 112ms avg, 426ms max, 25.4 RPS</code></pre>
-
-      <h3>Dual FPM Pool Architecture</h3>
-      <p>To keep the dashboard responsive during load testing, the application routes traffic to two separate PHP-FPM pools:</p>
-      <table>
-        <tr><th>Pool</th><th>Port</th><th>Workers</th><th>Routes</th></tr>
-        <tr><td>Main (www)</td><td>9000</td><td>~8</td><td><code>/api/loadtest/*</code>, <code>/api/simulations/*</code>, <code>/api/metrics/probe</code></td></tr>
-        <tr><td>Metrics</td><td>9001</td><td>4</td><td><code>/api/metrics</code>, <code>/api/metrics/internal-probes</code>, <code>/api/health/*</code>, <code>/api/admin/events</code></td></tr>
-      </table>
-      <p>This ensures the dashboard can always poll for metrics, even when all main workers are busy with load test requests. The probe endpoint uses the main pool so it measures actual load test latency.</p>
 
       <h3>What It Tests</h3>
       <ul>
@@ -544,61 +618,77 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000
       </ul>
 
       <div class="info-box">
-        <strong>📘 Full Documentation:</strong> See the <a href="/azure-diagnostics.html#load-testing">Azure Diagnostics Guide</a> for detailed setup instructions, tuning scenarios, and diagnostic techniques.
+        <p><strong>&#x1F4D8; Full Documentation:</strong> See the <a href="/azure-diagnostics.html#load-testing">Azure Diagnostics Guide</a> for detailed setup instructions, tuning scenarios, and diagnostic techniques.</p>
       </div>
     </section>
-  </main>
 
-  <!-- Right Sidebar: On This Page -->
-  <aside class="docs-right-sidebar">
-    <div class="sidebar-card">
-      <div class="sidebar-title">ON THIS PAGE</div>
-      <ul class="sidebar-links" id="page-nav">
-        <li><a href="#overview">🎯 Overview</a></li>
-      </ul>
-      <div class="sidebar-section-label">SIMULATIONS</div>
-      <ul class="sidebar-links" id="page-nav-sims">
-        <li><a href="#cpu-stress">🔥 CPU Stress</a></li>
-        <li><a href="#memory-pressure">📊 Memory Pressure</a></li>
-        <!-- PORTING NOTE: Update section link for target runtime -->
-        <li><a href="#request-thread-blocking">🧵 Request Thread Blocking</a></li>
-        <li><a href="#crash-simulation">💥 Crash Simulation</a></li>
-      </ul>
-      <div class="sidebar-section-label">REFERENCE</div>
-      <ul class="sidebar-links" id="page-nav-ref">
-        <li><a href="#diagnostics">🔬 Diagnostics</a></li>
-        <li><a href="#api-reference">📋 API Reference</a></li>
-        <li><a href="#load-testing">📈 Azure Load Testing</a></li>
-      </ul>
-    </div>
-  </aside>
-  </div><!-- /docs-page-wrapper -->
+    </main>
+    </div><!-- /.doc-main -->
+
+    <!-- Right Sidebar Table of Contents -->
+    <aside class="doc-toc">
+      <div class="doc-toc-sticky">
+        <nav class="doc-toc-card">
+          <div class="doc-toc-title">On This Page</div>
+          <ul>
+            <li class="doc-toc-item">
+              <a href="#overview"><span class="toc-icon">&#x1F4CB;</span>Overview</a>
+            </li>
+            <div class="doc-toc-divider"></div>
+            <div class="doc-toc-section-label">Simulations</div>
+            <li class="doc-toc-item">
+              <a href="#cpu-stress"><span class="toc-icon">&#x1F525;</span>CPU Stress</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#memory-pressure"><span class="toc-icon">&#x1F4CA;</span>Memory Pressure</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#request-thread-blocking"><span class="toc-icon">&#x1F9F5;</span>Request Blocking</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#crash-simulation"><span class="toc-icon">&#x1F4A5;</span>Crash Simulation</a>
+            </li>
+            <div class="doc-toc-divider"></div>
+            <div class="doc-toc-section-label">Reference</div>
+            <li class="doc-toc-item">
+              <a href="#diagnostics"><span class="toc-icon">&#x1F52C;</span>Diagnostics</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#api-reference"><span class="toc-icon">&#x1F4CB;</span>API Reference</a>
+            </li>
+            <li class="doc-toc-item">
+              <a href="#load-testing"><span class="toc-icon">&#x1F4C8;</span>Azure Load Testing</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </aside>
+  </div><!-- /.doc-layout -->
 
   <footer>
     <p>Performance Problem Simulator &mdash; Educational Tool for Azure App Service Diagnostics</p>
-    <p id="page-footer"></p>
+    <p id="footer-credits"></p>
     <p id="build-info">Build: Loading...</p>
   </footer>
   <script>
-    // Load environment info for SKU badge and footer
+    // Load environment info for SKU badge
     fetch('/api/health')
       .then(r => r.json())
       .then(data => {
         const badge = document.getElementById('sku-badge');
         if (badge && data.environment) badge.textContent = 'SKU: ' + (data.environment.sku || 'Local');
-        // Load build info for footer
+        // Load page footer from PAGE_FOOTER env var (allows HTML links)
+        const footerCredits = document.getElementById('footer-credits');
+        if (footerCredits) {
+          if (data.pageFooter) {
+            footerCredits.innerHTML = data.pageFooter;
+          } else {
+            footerCredits.style.display = 'none';
+          }
+        }
         const buildInfo = document.getElementById('build-info');
         if (buildInfo && data.buildTimestamp) {
           buildInfo.textContent = 'Build: ' + data.buildTimestamp;
-        }
-        // Load page footer from PAGE_FOOTER env var (allows HTML links)
-        const pageFooter = document.getElementById('page-footer');
-        if (pageFooter) {
-          if (data.pageFooter) {
-            pageFooter.innerHTML = data.pageFooter;
-          } else {
-            pageFooter.style.display = 'none';
-          }
         }
       })
       .catch(() => {});
@@ -632,23 +722,30 @@ https://perfsimphp.azurewebsites.net/api/loadtest?workMs=5000&amp;memoryKb=50000
 
     // Scroll-spy: highlight active section in right sidebar
     (function() {
-      const links = document.querySelectorAll('#page-nav a, #page-nav-sims a, #page-nav-ref a');
-      const sections = [];
-      links.forEach(link => {
-        const id = link.getAttribute('href').slice(1);
-        const el = document.getElementById(id);
-        if (el) sections.push({ id, el, link });
-      });
-      function updateActive() {
-        let current = sections[0];
-        for (const s of sections) {
-          if (s.el.getBoundingClientRect().top <= 100) current = s;
-        }
-        links.forEach(l => l.classList.remove('active'));
-        if (current) current.link.classList.add('active');
+      const tocLinks = document.querySelectorAll('.doc-toc-item a');
+      const sections = document.querySelectorAll('.docs-section');
+
+      function updateActiveTocLink() {
+        const scrollPos = window.scrollY + 120;
+        
+        sections.forEach(section => {
+          const sectionTop = section.offsetTop;
+          const sectionHeight = section.offsetHeight;
+          const sectionId = section.getAttribute('id');
+          
+          if (sectionId && scrollPos >= sectionTop && scrollPos < sectionTop + sectionHeight) {
+            tocLinks.forEach(link => {
+              link.classList.remove('active');
+              if (link.getAttribute('href') === '#' + sectionId) {
+                link.classList.add('active');
+              }
+            });
+          }
+        });
       }
-      window.addEventListener('scroll', updateActive, { passive: true });
-      updateActive();
+
+      window.addEventListener('scroll', updateActiveTocLink);
+      updateActiveTocLink(); // Initial call
     })();
   </script>
 </body>
